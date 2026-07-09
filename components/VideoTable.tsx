@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { ExternalLink, ChevronUp, ChevronDown, Tag, Globe, Lock, EyeOff } from 'lucide-react';
 import type { VideoStats } from '@/lib/youtube';
@@ -36,18 +36,26 @@ export default function VideoTable({ videos }: Props) {
     else { setSortKey(key); setSortDir('desc'); }
   };
 
-  const filtered = videos.filter(v => {
-    if (filter === 'public') return v.status === 'public';
-    if (filter === 'private') return v.status !== 'public';
-    if (filter === 'issues') return v.isEngagementDisabled || !v.hasTags || !v.hasLanguage || v.engagementRate < 1;
-    return true;
-  });
+  const counts = useMemo(() => ({
+    all: videos.length,
+    public: videos.filter(v => v.status === 'public').length,
+    private: videos.filter(v => v.status !== 'public').length,
+    issues: videos.filter(v => v.isEngagementDisabled || !v.hasTags || v.engagementRate < 1).length,
+  }), [videos]);
 
-  const sorted = [...filtered].sort((a, b) => {
-    let av = sortKey === 'publishedAt' ? new Date(a[sortKey]).getTime() : (a[sortKey] as number);
-    let bv = sortKey === 'publishedAt' ? new Date(b[sortKey]).getTime() : (b[sortKey] as number);
-    return sortDir === 'desc' ? bv - av : av - bv;
-  });
+  const sorted = useMemo(() => {
+    const filtered = videos.filter(v => {
+      if (filter === 'public') return v.status === 'public';
+      if (filter === 'private') return v.status !== 'public';
+      if (filter === 'issues') return v.isEngagementDisabled || !v.hasTags || !v.hasLanguage || v.engagementRate < 1;
+      return true;
+    });
+    return [...filtered].sort((a, b) => {
+      const av = sortKey === 'publishedAt' ? new Date(a[sortKey]).getTime() : (a[sortKey] as number);
+      const bv = sortKey === 'publishedAt' ? new Date(b[sortKey]).getTime() : (b[sortKey] as number);
+      return sortDir === 'desc' ? bv - av : av - bv;
+    });
+  }, [videos, filter, sortKey, sortDir]);
 
   const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
     <button onClick={() => toggleSort(k)} className="flex items-center gap-0.5 text-[10px] text-[#8888bb] hover:text-white transition-colors">
@@ -68,7 +76,7 @@ export default function VideoTable({ videos }: Props) {
               filter === f ? 'bg-white/15 text-white border border-white/20' : 'bg-white/5 text-[#8888bb] border border-white/5'
             }`}
           >
-            {f === 'all' ? `Semua (${videos.length})` : f === 'public' ? `Publik (${videos.filter(v => v.status === 'public').length})` : f === 'private' ? `Private (${videos.filter(v => v.status !== 'public').length})` : `Ada Isu (${videos.filter(v => v.isEngagementDisabled || !v.hasTags || v.engagementRate < 1).length})`}
+            {f === 'all' ? `Semua (${counts.all})` : f === 'public' ? `Publik (${counts.public})` : f === 'private' ? `Private (${counts.private})` : `Ada Isu (${counts.issues})`}
           </button>
         ))}
       </div>

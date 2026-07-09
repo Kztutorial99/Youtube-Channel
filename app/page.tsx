@@ -87,10 +87,11 @@ export default function Dashboard() {
   }, []);
 
   const handleSynced = (data: { channel: unknown; videos: unknown; issues: unknown; summary: unknown }) => {
-    setChannel(data.channel as ChannelStats);
-    setVideos(data.videos as VideoStats[]);
-    setIssues(data.issues as IssueCheck[]);
-    setSummary(data.summary as IssueSummary);
+    // Validate shape before applying to state to avoid runtime crashes on malformed API responses
+    if (data.channel && typeof data.channel === 'object') setChannel(data.channel as ChannelStats);
+    if (Array.isArray(data.videos)) setVideos(data.videos as VideoStats[]);
+    if (Array.isArray(data.issues)) setIssues(data.issues as IssueCheck[]);
+    if (data.summary && typeof data.summary === 'object') setSummary(data.summary as IssueSummary);
     setLastSync(new Date().toISOString());
   };
 
