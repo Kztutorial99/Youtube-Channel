@@ -1,227 +1,146 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
-import { ExternalLink, ChevronUp, ChevronDown, Tag, Globe, Lock, EyeOff } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Eye, ThumbsUp, MessageSquare, Clock, Tag, Globe } from 'lucide-react';
 import type { VideoStats } from '@/lib/youtube';
 
-interface Props {
-  videos: VideoStats[];
-}
-
-type SortKey = 'views' | 'engagementRate' | 'likes' | 'comments' | 'publishedAt';
-
-function formatNum(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-  return n.toLocaleString('id-ID');
-}
-
-function engColor(rate: number, disabled: boolean): string {
-  if (disabled) return 'text-red-500 font-bold';
-  if (rate >= 2) return 'text-brand-green';
-  if (rate >= 1.5) return 'text-brand-blue';
-  if (rate >= 1) return 'text-brand-yellow';
-  return 'text-brand-orange';
-}
-
-export default function VideoTable({ videos }: Props) {
-  const [sortKey, setSortKey] = useState<SortKey>('views');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [filter, setFilter] = useState<'all' | 'public' | 'private' | 'issues'>('all');
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
-    else { setSortKey(key); setSortDir('desc'); }
-  };
-
-  const counts = useMemo(() => ({
-    all: videos.length,
-    public: videos.filter(v => v.status === 'public').length,
-    private: videos.filter(v => v.status !== 'public').length,
-    issues: videos.filter(v => v.isEngagementDisabled || !v.hasTags || v.engagementRate < 1).length,
-  }), [videos]);
-
-  const sorted = useMemo(() => {
-    const filtered = videos.filter(v => {
-      if (filter === 'public') return v.status === 'public';
-      if (filter === 'private') return v.status !== 'public';
-      if (filter === 'issues') return v.isEngagementDisabled || !v.hasTags || !v.hasLanguage || v.engagementRate < 1;
-      return true;
-    });
-    return [...filtered].sort((a, b) => {
-      const av = sortKey === 'publishedAt' ? new Date(a[sortKey]).getTime() : (a[sortKey] as number);
-      const bv = sortKey === 'publishedAt' ? new Date(b[sortKey]).getTime() : (b[sortKey] as number);
-      return sortDir === 'desc' ? bv - av : av - bv;
-    });
-  }, [videos, filter, sortKey, sortDir]);
-
-  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
-    <button onClick={() => toggleSort(k)} className="flex items-center gap-0.5 text-[10px] text-[#8888bb] hover:text-white transition-colors">
-      {label}
-      {sortKey === k ? (sortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : null}
-    </button>
+function StatPill({ icon: Icon, value, label }: { icon: React.ElementType; value: string | number; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1.5">
+      <Icon className="w-3 h-3 text-[#8888bb]" />
+      <div>
+        <p className="text-[10px] font-bold text-white">{value}</p>
+        <p className="text-[9px] text-[#555577]">{label}</p>
+      </div>
+    </div>
   );
+}
+
+function BadgeRow({ video }: { video: VideoStats }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {video.isEngagementDisabled ? (
+        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20 font-medium">
+          <AlertTriangle className="w-2.5 h-2.5" /> Engagement Disabled
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-green/15 text-brand-green border border-brand-green/20 font-medium">
+          <CheckCircle2 className="w-2.5 h-2.5" /> Engagement OK
+        </span>
+      )}
+      {!video.hasTags && (
+        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 font-medium">
+          <Tag className="w-2.5 h-2.5" /> No Tags
+        </span>
+      )}
+      {!video.hasLanguage && (
+        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20 font-medium">
+          <Globe className="w-2.5 h-2.5" /> No Language
+        </span>
+      )}
+      {video.ctr !== undefined && video.ctr === 0 && (
+        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20 font-medium">
+          <AlertTriangle className="w-2.5 h-2.5" /> CTR 0%
+        </span>
+      )}
+      {video.ctr !== undefined && video.ctr > 0 && (
+        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-green/15 text-brand-green border border-brand-green/20 font-medium">
+          <CheckCircle2 className="w-2.5 h-2.5" /> CTR {video.ctr}%
+        </span>
+      )}
+    </div>
+  );
+}
+
+export default function VideoTable({ videos }: { videos: VideoStats[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'views' | 'engagement' | 'date'>('views');
+
+  const sorted = [...videos].sort((a, b) => {
+    if (sortBy === 'views') return b.views - a.views;
+    if (sortBy === 'engagement') return b.engagementRate - a.engagementRate;
+    return a.daysSinceUpload - b.daysSinceUpload;
+  });
 
   return (
-    <div className="mb-4 animate-fade-in">
-      {/* Filter tabs */}
-      <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-        {(['all', 'public', 'private', 'issues'] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
-              filter === f ? 'bg-white/15 text-white border border-white/20' : 'bg-white/5 text-[#8888bb] border border-white/5'
-            }`}
-          >
-            {f === 'all' ? `Semua (${counts.all})` : f === 'public' ? `Publik (${counts.public})` : f === 'private' ? `Private (${counts.private})` : `Ada Isu (${counts.issues})`}
+    <div className="space-y-3 pb-4">
+      {/* Sort */}
+      <div className="flex gap-2">
+        {(['views','engagement','date'] as const).map(s => (
+          <button key={s} onClick={() => setSortBy(s)}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-all border ${sortBy === s ? 'bg-brand-red/20 text-brand-red border-brand-red/30' : 'bg-white/5 text-[#8888bb] border-white/5'}`}>
+            {s === 'views' ? 'Views' : s === 'engagement' ? 'Engagement' : 'Terbaru'}
           </button>
         ))}
       </div>
 
-      {/* Sort bar */}
-      <div className="flex gap-3 px-1 mb-2 flex-wrap">
-        <span className="text-[10px] text-[#555577]">Sort:</span>
-        <SortBtn k="views" label="Views" />
-        <SortBtn k="engagementRate" label="Engagement" />
-        <SortBtn k="likes" label="Likes" />
-        <SortBtn k="publishedAt" label="Tanggal" />
-      </div>
-
       {/* Video list */}
       <div className="space-y-2">
-        {sorted.map((v, idx) => {
-          const isOpen = expanded === v.id;
-          const hasIssue = v.isEngagementDisabled || !v.hasTags || !v.hasLanguage;
-
+        {sorted.map((video, idx) => {
+          const isOpen = expanded === video.id;
+          const hasIssue = video.isEngagementDisabled || !video.hasTags || !video.hasLanguage;
           return (
-            <div
-              key={v.id}
-              className={`glass rounded-xl border overflow-hidden transition-all ${
-                v.isEngagementDisabled ? 'border-red-500/40' :
-                hasIssue ? 'border-yellow-500/20' :
-                'border-white/5'
-              }`}
-            >
-              <button
-                onClick={() => setExpanded(isOpen ? null : v.id)}
-                className="w-full flex items-center gap-3 p-3 text-left"
-              >
-                {/* Rank */}
-                <span className="text-[11px] text-[#555577] w-5 text-center shrink-0 font-mono">
-                  {filter === 'all' || filter === 'issues' ? idx + 1 : idx + 1}
-                </span>
-
+            <div key={video.id}
+              className={`glass rounded-xl border overflow-hidden transition-all ${hasIssue ? 'border-yellow-500/15' : 'border-white/5'}`}>
+              <button className="w-full text-left p-3 flex gap-3" onClick={() => setExpanded(isOpen ? null : video.id)}>
                 {/* Thumbnail */}
-                <div className="relative w-14 h-10 rounded-lg overflow-hidden shrink-0 bg-white/5">
-                  {v.thumbnail ? (
-                    <Image src={v.thumbnail} alt={v.title} fill className="object-cover" />
+                <div className="relative shrink-0 w-[72px] h-[41px] rounded-lg overflow-hidden bg-white/5">
+                  {video.thumbnail ? (
+                    <Image src={video.thumbnail} alt={video.title} fill className="object-cover" sizes="72px" />
                   ) : (
-                    <div className="w-full h-full bg-white/5" />
-                  )}
-                  {v.status !== 'public' && (
-                    <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                      <Lock className="w-3 h-3 text-red-400" />
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Eye className="w-4 h-4 text-[#555577]" />
                     </div>
                   )}
-                  {v.isEngagementDisabled && (
-                    <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center">
-                      <EyeOff className="w-3 h-3 text-red-300" />
-                    </div>
-                  )}
-                  <span className="absolute bottom-0.5 right-0.5 text-[9px] bg-black/80 text-white px-0.5 rounded">
-                    {v.duration}
+                  <span className="absolute bottom-0.5 left-0.5 bg-black/80 text-[8px] text-white px-1 py-0.5 rounded font-medium">
+                    #{idx + 1}
                   </span>
+                  {hasIssue && (
+                    <div className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                      <AlertTriangle className="w-2.5 h-2.5 text-yellow-400" />
+                    </div>
+                  )}
                 </div>
 
-                {/* Title + stats */}
+                {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-white line-clamp-2 leading-tight mb-1">{v.title}</p>
-                  <div className="flex gap-2 flex-wrap">
-                    <span className="text-[10px] text-brand-blue">{formatNum(v.views)} views</span>
-                    <span className={`text-[10px] ${engColor(v.engagementRate, v.isEngagementDisabled)}`}>
-                      {v.isEngagementDisabled ? '⚠️ 0%' : `${v.engagementRate}%`}
-                    </span>
+                  <p className="text-xs font-semibold text-white leading-tight line-clamp-2 mb-1.5">{video.title}</p>
+                  <div className="flex items-center gap-2 text-[10px] text-[#555577]">
+                    <span className="flex items-center gap-0.5"><Eye className="w-2.5 h-2.5" /> {video.views >= 1000 ? `${(video.views/1000).toFixed(1)}k` : video.views}</span>
+                    <span className="flex items-center gap-0.5"><ThumbsUp className="w-2.5 h-2.5" /> {video.likes >= 1000 ? `${(video.likes/1000).toFixed(1)}k` : video.likes}</span>
+                    <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" /> {video.daysSinceUpload}h lalu</span>
                   </div>
                 </div>
-
-                {/* Expand */}
-                {isOpen ? <ChevronUp className="w-4 h-4 text-[#555577] shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#555577] shrink-0" />}
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-[#555577] shrink-0 mt-1" /> : <ChevronDown className="w-3.5 h-3.5 text-[#555577] shrink-0 mt-1" />}
               </button>
 
               {isOpen && (
-                <div className="px-3 pb-3 border-t border-white/5 pt-3 animate-slide-up">
-                  {/* Detailed stats */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    {[
-                      { label: 'Views', value: formatNum(v.views) },
-                      { label: 'Likes', value: formatNum(v.likes) },
-                      { label: 'Komentar', value: formatNum(v.comments) },
-                      { label: 'Engagement', value: v.isEngagementDisabled ? '⚠️ 0%' : `${v.engagementRate}%` },
-                      { label: 'Durasi', value: v.duration },
-                      { label: 'Hari lalu', value: `${v.daysSinceUpload}d` },
-                    ].map(s => (
-                      <div key={s.label} className="bg-white/5 rounded-lg p-2 text-center">
-                        <p className="text-[10px] text-[#666688] mb-0.5">{s.label}</p>
-                        <p className="text-xs font-semibold text-white">{s.value}</p>
-                      </div>
-                    ))}
+                <div className="px-3 pb-3 border-t border-white/5 pt-3 space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <StatPill icon={Eye} value={video.views.toLocaleString('id-ID')} label="Views" />
+                    <StatPill icon={ThumbsUp} value={video.likes.toLocaleString('id-ID')} label="Likes" />
+                    <StatPill icon={MessageSquare} value={video.comments.toLocaleString('id-ID')} label="Komentar" />
                   </div>
-
-                  {/* Flags */}
-                  <div className="flex gap-1.5 flex-wrap mb-2">
-                    {!v.hasTags && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/20">
-                        <Tag className="w-3 h-3" /> No Tags
-                      </span>
-                    )}
-                    {!v.hasLanguage && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/20">
-                        <Globe className="w-3 h-3" /> No Lang
-                      </span>
-                    )}
-                    {v.isEngagementDisabled && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-red-600/30 text-red-300 border border-red-600/30 font-semibold">
-                        <EyeOff className="w-3 h-3" /> Engagement Dimatikan!
-                      </span>
-                    )}
-                    {v.status !== 'public' && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-red-500/20 text-red-400 border border-red-500/20">
-                        <Lock className="w-3 h-3" /> {v.status}
-                      </span>
-                    )}
-                    {v.hasTags && v.hasLanguage && !v.isEngagementDisabled && v.status === 'public' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-green-500/20 text-green-400 border border-green-500/20">
-                        ✅ OK
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Tags */}
-                  {v.tags.length > 0 && (
-                    <div className="mb-2">
-                      <p className="text-[10px] text-[#555577] mb-1">Tags ({v.tags.length}):</p>
-                      <div className="flex gap-1 flex-wrap">
-                        {v.tags.slice(0, 8).map(t => (
-                          <span key={t} className="px-1.5 py-0.5 rounded text-[9px] bg-white/5 text-[#8888bb] border border-white/5">{t}</span>
-                        ))}
-                        {v.tags.length > 8 && <span className="text-[9px] text-[#555577]">+{v.tags.length - 8}</span>}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 bg-white/5 rounded-lg p-2">
+                      <p className="text-[9px] text-[#555577] mb-1">Engagement Rate</p>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-green"
+                            style={{ width: `${Math.min(video.engagementRate * 10, 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold text-white">{video.engagementRate}%</span>
                       </div>
                     </div>
-                  )}
-
-                  {/* Open in YouTube */}
-                  <a
-                    href={`https://youtube.com/watch?v=${v.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-[11px] text-brand-red hover:text-red-300 transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Buka di YouTube
-                  </a>
+                    {video.duration && (
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-[#555577] mb-0.5">Durasi</p>
+                        <p className="text-[11px] font-bold text-white">{video.duration}</p>
+                      </div>
+                    )}
+                  </div>
+                  <BadgeRow video={video} />
                 </div>
               )}
             </div>
