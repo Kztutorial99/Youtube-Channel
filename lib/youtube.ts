@@ -50,6 +50,7 @@ export interface IssueCheck {
   affectedCount?: number;
   affectedItems?: string[];
   affectedVideoIds?: string[];
+  suggestion?: string;
   action: string;
   checkFn?: string;
 }
@@ -74,7 +75,6 @@ export async function getChannelStats(): Promise<ChannelStats> {
   const data = await res.json();
   const ch = data.items[0];
   const branding = ch.brandingSettings?.channel || {};
-
   return {
     id: ch.id,
     title: ch.snippet.title,
@@ -108,9 +108,7 @@ export async function getAllVideos(): Promise<VideoStats[]> {
       { next: { revalidate: 60 } }
     );
     const playlistData = await playlistRes.json();
-    for (const item of playlistData.items || []) {
-      videoIds.push(item.contentDetails.videoId);
-    }
+    for (const item of playlistData.items || []) videoIds.push(item.contentDetails.videoId);
     pageToken = playlistData.nextPageToken || '';
   } while (pageToken);
 
@@ -129,14 +127,11 @@ export async function getAllVideos(): Promise<VideoStats[]> {
       const comments = parseInt(v.statistics?.commentCount || '0');
       const engRate = views > 0 ? parseFloat(((likes + comments) / views * 100).toFixed(2)) : 0;
       const publishedAt = v.snippet?.publishedAt || '';
-      const daysSince = publishedAt
-        ? Math.floor((Date.now() - new Date(publishedAt).getTime()) / 86400000)
-        : 0;
+      const daysSince = publishedAt ? Math.floor((Date.now() - new Date(publishedAt).getTime()) / 86400000) : 0;
       const isEngDisabled =
         v.statistics?.likeCount === undefined &&
         v.statistics?.commentCount === undefined &&
         views > 500;
-
       videos.push({
         id: v.id,
         title: v.snippet?.title || '',
@@ -145,10 +140,7 @@ export async function getAllVideos(): Promise<VideoStats[]> {
         publishedAt,
         duration: formatDuration(durationSec),
         durationSeconds: durationSec,
-        views,
-        likes,
-        comments,
-        engagementRate: engRate,
+        views, likes, comments, engagementRate: engRate,
         tags: v.snippet?.tags || [],
         hasTags: !!(v.snippet?.tags && v.snippet.tags.length > 0),
         defaultLanguage: v.snippet?.defaultLanguage || v.snippet?.defaultAudioLanguage || '',
@@ -160,7 +152,6 @@ export async function getAllVideos(): Promise<VideoStats[]> {
       });
     }
   }
-
   return videos.sort((a, b) => b.views - a.views);
 }
 
@@ -177,23 +168,18 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
 
   const titleMap: Record<string, VideoStats[]> = {};
   for (const v of publicVideos) {
-    const norm = v.title.toLowerCase().replace(/\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}|\d+)\s*/gi, ' ').trim();
+    const norm = v.title.toLowerCase()
+      .replace(/\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}|\d+)\s*/gi, ' ').trim();
     titleMap[norm] = titleMap[norm] || [];
     titleMap[norm].push(v);
   }
   const dupTitles = Object.values(titleMap).filter(g => g.length > 1).flat();
-
   const noDescVideos = publicVideos.filter(v => !v.description || v.description.trim().length < 50);
-
-  const daysSinceLastUpload = publicVideos.length > 0
-    ? Math.min(...publicVideos.map(v => v.daysSinceUpload))
-    : 999;
+  const daysSinceLastUpload = publicVideos.length > 0 ? Math.min(...publicVideos.map(v => v.daysSinceUpload)) : 999;
   const isUploadStale = daysSinceLastUpload > 60;
+  const has2026Content = publicVideos.some(v => /2025|2026/.test(v.title) && new Date(v.publishedAt).getFullYear() >= 2025);
 
-  const has2026Content = publicVideos.some(v =>
-    /2025|2026/.test(v.title) && new Date(v.publishedAt).getFullYear() >= 2025
-  );
-
+  // Semua issue dikembalikan (incl fixed) — filtering dilakukan di api/data route
   const issues: IssueCheck[] = [
     {
       id: 'channel-description',
@@ -203,6 +189,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       severity: channel.hasDescription ? 'low' : 'critical',
       status: channel.hasDescription ? 'fixed' : 'pending',
       action: 'Tambah deskripsi di YouTube Studio → Customization → Basic Info',
+      suggestion: `kz.tutorial adalah channel yang membahas tutorial Android, Termux, ZArchiver, dan aplikasi modifikasi untuk pengguna Indonesia. Temukan cara install aplikasi, bypass error, dan trik Android terbaru di sini. Subscribe untuk update mingguan!`,
     },
     {
       id: 'channel-keywords',
@@ -212,6 +199,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       severity: channel.hasKeywords ? 'low' : 'high',
       status: channel.hasKeywords ? 'fixed' : 'pending',
       action: 'Tambah keywords di YouTube Studio → Customization → Basic Info → Keywords',
+      suggestion: `termux android tutorial zarchiver aplikasi mod cara install bypass error android indonesia hp`,
     },
     {
       id: 'video-typos',
@@ -223,7 +211,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedCount: typoVideos.length,
       affectedItems: typoVideos.map(v => v.title),
       affectedVideoIds: typoVideos.map(v => v.id),
-      action: 'Edit judul langsung di YouTube Studio atau via API',
+      action: 'Edit judul langsung di YouTube Studio → Content → klik video → Edit title',
     },
     {
       id: 'duplicate-titles',
@@ -235,7 +223,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedCount: dupTitles.length,
       affectedItems: dupTitles.map(v => v.title),
       affectedVideoIds: dupTitles.map(v => v.id),
-      action: 'Tambahkan suffix unik (bulan/tahun/versi) ke setiap judul',
+      action: 'Tambahkan suffix unik ke judul',
+      suggestion: `Contoh suffix: "2024 Terbaru", "No Root", "Tanpa Error", "100% Berhasil", "Android 14/15"\nFormat: [Topik] [Versi/Tahun] [Keunggulan] - [Channel]\nContoh: "Install Termux 2025 Tanpa Error - kz.tutorial"`,
     },
     {
       id: 'video-tags',
@@ -247,7 +236,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedCount: noTagVideos.length,
       affectedItems: noTagVideos.map(v => v.title),
       affectedVideoIds: noTagVideos.map(v => v.id),
-      action: 'Tambahkan tags relevan via YouTube Studio atau API',
+      action: 'Tambahkan tags di YouTube Studio → Content → klik video → Details → Tags',
+      suggestion: `termux, termux android, tutorial termux, cara install termux, termux tanpa error, zarchiver, zarchiver mod, android tutorial, tutorial android indonesia, cara install aplikasi android, hp android, android terbaru, tutorial hp, aplikasi android gratis, bypass error android`,
     },
     {
       id: 'default-language',
@@ -259,7 +249,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedCount: noLangVideos.length,
       affectedItems: noLangVideos.map(v => v.title),
       affectedVideoIds: noLangVideos.map(v => v.id),
-      action: 'Set defaultLanguage ke "id" via API atau YouTube Studio',
+      action: 'YouTube Studio → Content → klik video → Details → Language → pilih "Indonesian"',
+      suggestion: `Pilih bahasa: Indonesian (id)\nYouTube Studio → Content → pilih video → Edit → Details → Language & captions → Video language: Indonesian`,
     },
     {
       id: 'engagement-disabled',
@@ -272,6 +263,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedItems: engDisabledVideos.map(v => `${v.title} (${v.views.toLocaleString()} views)`),
       affectedVideoIds: engDisabledVideos.map(v => v.id),
       action: 'Private atau hapus video ini — tidak berkontribusi ke engagement channel',
+      suggestion: `Opsi 1: Private video (jaga views, hilangkan dari search)\nOpsi 2: Hapus video (bersihkan channel)\nOpsi 3: Appeal ke YouTube jika merasa tidak melanggar\n\nYouTube Studio → Content → klik ⋮ di video → Make private / Delete`,
     },
     {
       id: 'low-engagement',
@@ -283,7 +275,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedCount: lowEngVideos.length,
       affectedItems: lowEngVideos.map(v => `${v.title} (${v.engagementRate.toFixed(1)}%)`),
       affectedVideoIds: lowEngVideos.map(v => v.id),
-      action: 'Update deskripsi, thumbnail, dan judul untuk meningkatkan CTR',
+      action: 'Update thumbnail & tambah CTA di deskripsi untuk dorong likes/komentar',
+      suggestion: `Tambahkan di akhir deskripsi:\n---\nKalau video ini membantu, jangan lupa:\n👍 LIKE video ini\n💬 COMMENT pertanyaan kamu\n🔔 SUBSCRIBE & aktifkan notifikasi\n\nAda yang mau ditanyakan? Tulis di kolom komentar!`,
     },
     {
       id: 'upload-frequency',
@@ -295,6 +288,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       severity: isUploadStale ? 'critical' : 'low',
       status: isUploadStale ? 'pending' : 'fixed',
       action: 'Upload 2x/minggu — Minggu & Selasa jam 13:00 WIB',
+      suggestion: `Jadwal upload ideal:\n• Minggu 13:00 WIB → video tutorial utama\n• Selasa 13:00 WIB → video tips/trik pendek\n\nIde konten:\n- "Cara Install Termux 2025 di Android 14/15"\n- "ZArchiver Mod Terbaru - Fitur Premium Gratis"\n- "5 Aplikasi Android Wajib untuk Developer 2025"`,
     },
     {
       id: 'fresh-content-2026',
@@ -303,7 +297,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       description: 'Kompetitor dengan video 2025–2026 mulai menggeser ranking di keyword utama.',
       severity: has2026Content ? 'low' : 'high',
       status: has2026Content ? 'fixed' : 'pending',
-      action: 'Buat video: "Termux Mod 2026", "ZArchiver Android 15", "Install Termux 2026 Tanpa Error"',
+      action: 'Buat minimal 1 video dengan keyword 2025/2026 minggu ini',
+      suggestion: `Judul yang bisa langsung dipakai:\n• "Install Termux di Android 15 - 2025 Terbaru Tanpa Error"\n• "ZArchiver 2025 - Cara Pakai Fitur Baru di HP Android"\n• "Cara Bypass Root Android 2025 - 100% Berhasil"\n• "5 Aplikasi Termux 2025 yang Wajib Kamu Coba"\n• "Tutorial Lengkap Termux Pemula 2025 dari Nol"`,
     },
     {
       id: 'video-description',
@@ -315,7 +310,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedCount: noDescVideos.length,
       affectedItems: noDescVideos.slice(0, 10).map(v => v.title),
       affectedVideoIds: noDescVideos.slice(0, 10).map(v => v.id),
-      action: 'Tambah deskripsi lengkap (keyword + link + CTA) di setiap video',
+      action: 'Tambah deskripsi di YouTube Studio → Content → klik video → Description',
+      suggestion: `Template deskripsi siap pakai (ganti bagian [...]:\n\nDi video ini kamu akan belajar cara [topik video] di Android dengan mudah dan tanpa error.\n\n📌 Yang dibahas di video ini:\n• [poin 1]\n• [poin 2]\n• [poin 3]\n\n🔧 Aplikasi yang dibutuhkan:\n• [nama aplikasi]\n\n⏱ Timestamp:\n0:00 - Intro\n[sesuaikan]\n\n---\nKalau video ini membantu, jangan lupa LIKE, COMMENT, dan SUBSCRIBE!\n\n#termux #android #tutorial #indonesia`,
     },
     {
       id: 'captions',
@@ -324,7 +320,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       description: 'Caption meningkatkan watch time, aksesibilitas, dan ranking di search.',
       severity: 'medium',
       status: 'pending',
-      action: 'YouTube Studio → Subtitles → Auto-generate → Edit → Publish (untuk tiap video)',
+      action: 'YouTube Studio → Subtitles → Auto-generate → Edit → Publish',
+      suggestion: `Cara aktifkan subtitle otomatis:\n1. Buka YouTube Studio\n2. Klik "Subtitles" di menu kiri\n3. Pilih video yang mau diberi subtitle\n4. Klik "Add" → "Auto-generated"\n5. Tunggu proses → Edit jika ada yang salah → Publish\n\nLakukan untuk video dengan views tertinggi dulu!`,
     },
     {
       id: 'long-videos-low-views',
@@ -336,7 +333,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       affectedCount: longVideos.length,
       affectedItems: longVideos.map(v => `${v.title} (${v.duration}, ${v.views.toLocaleString()} views)`),
       affectedVideoIds: longVideos.map(v => v.id),
-      action: 'Target durasi 5–8 menit untuk video baru. Edit versi pendek dari video yang ada.',
+      action: 'Target durasi 5–8 menit untuk video baru',
+      suggestion: `Tips potong durasi tanpa hilang konten:\n• Hapus intro panjang (maks 15 detik)\n• Skip bagian loading/menunggu\n• Gabungkan langkah-langkah kecil\n• Pakai text overlay untuk info tambahan tanpa narasi\n• Target: 5–8 menit = sweet spot engagement YouTube`,
     },
     {
       id: 'tos-links',
@@ -345,10 +343,10 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       description: 'Link subs4unlock.id di komentar = pelanggaran ToS YouTube → penyebab engagement dikunci pada video tertentu.',
       severity: 'critical',
       status: 'pending',
-      action: 'Hapus manual semua komentar yang berisi link subs4unlock.id di YouTube Studio → Comments',
+      action: 'Hapus manual semua komentar yang berisi link subs4unlock.id',
+      suggestion: `Cara hapus komentar bermasalah:\n1. YouTube Studio → Comments\n2. Filter: "Contains links"\n3. Cari komentar dengan "subs4unlock"\n4. Klik ⋮ → Delete comment\n\nAtau hapus langsung di video:\n1. Buka video → Comments section\n2. Hover komentar → klik ⋮ → Remove\n\n⚠️ Prioritas: hapus di video dengan 0 likes/comments dulu!`,
     },
   ];
 
-  // Only return non-fixed issues — fixed = validated by YouTube API, langsung hapus dari list
-  return issues.filter(i => i.status !== 'fixed');
+  return issues; // Return semua — filtering di api/data
 }
