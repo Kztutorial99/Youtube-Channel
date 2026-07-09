@@ -5,12 +5,72 @@ import { getAccessToken, fetchYTAuthed } from '@/lib/youtubeAuth';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-/** GET: scan semua video publik, cari yang pakai gimmick "sub4unlock". Read-only, tidak menghapus apa pun. */
+const SUB4UNLOCK_TEXT_PATTERNS: RegExp[] = [
+  /sub\s*4\s*unlock/i,
+  /subs?\s*4\s*unlock/i,
+  /subscribe\s*(to|untuk|dulu)?\s*unlock/i,
+  /sub\s*unlock/i,
+  /s4u\b/i,
+  /subs4unlock/i,
+];
+
+/** Cek komentar (top-level, termasuk pinned) di satu video untuk mention "sub4unlock". Pakai OAuth token. */
+async function scanVideoComments(videoId: string, accessToken: string): Promise<{ commentId: string; text: string; authorIsChannelOwner: boolean }[]> {
+  const found: { commentId: string; text: string; authorIsChannelOwner: boolean }[] = [];
+  let pageToken = '';
+  try {
+    do {
+      const res = await fetchYTAuthed(
+        `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&order=relevance&pageToken=${pageToken}`,
+        accessToken
+      );
+      if (!res.ok) break; // komentar dimatikan / video error — skip, jangan gagalkan scan keseluruhan
+      const j = await res.json();
+      for (const item of j.items || []) {
+        const s = item.snippet?.topLevelComment?.snippet;
+        const text = s?.textOriginal || '';
+        if (SUB4UNLOCK_TEXT_PATTERNS.some(p => p.test(text))) {
+          found.push({ commentId: item.id, text, authorIsChannelOwner: !!s?.authorChannelId?.value && s.authorChannelId.value === 'UCRaVHUXQGVAH7Gof7kixIoQ' });
+        }
+      }
+      pageToken = j.nextPageToken || '';
+    } while (pageToken);
+  } catch {
+    // ignore per-video comment scan failure, tidak menggagalkan scan video lain
+  }
+  return found;
+}
+
+/**
+ * GET: scan semua video publik untuk gimmick "sub4unlock" — baik di judul/deskripsi video
+ * maupun di komentar (termasuk komentar yang di-pin channel owner sendiri, pola paling umum
+ * untuk gate-content). Read-only, tidak menghapus apa pun.
+ */
 export async function GET() {
   try {
     const { data } = await getDashboardData();
-    const matches = findSub4UnlockVideos(data.videos);
-    return NextResponse.json({ count: matches.length, videos: matches });
+    const titleDescMatches = findSub4UnlockVideos(data.videos);
+
+    let commentMatches: { id: string; title: string; url: string; comments: { commentId: string; text: string; authorIsChannelOwner: boolean }[] }[] = [];
+    try {
+      const accessToken = await getAccessToken();
+      const publicVideos = data.videos.filter(v => v.status === 'public');
+      for (const v of publicVideos) {
+        const hits = await scanVideoComments(v.id, accessToken);
+        if (hits.length > 0) {
+          commentMatches.push({ id: v.id, title: v.title, url: `https://youtu.be/${v.id}`, comments: hits });
+        }
+      }
+    } catch (err: any) {
+      // OAuth belum siap — tetap kembalikan hasil scan judul/deskripsi, tandai comment scan gagal
+      return NextResponse.json({
+        titleDescMatches,
+        commentMatches: [],
+        commentScanError: err.message || 'Gagal scan komentar (OAuth).',
+      });
+    }
+
+    return NextResponse.json({ titleDescMatches, commentMatches });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Gagal scan video.' }, { status: 502 });
   }
