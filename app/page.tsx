@@ -3,33 +3,27 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import {
-  BarChart2, AlertTriangle, Video, Search, Lightbulb,
+  BarChart2, AlertTriangle, Video, Lightbulb,
   Youtube, WifiOff, RefreshCw, Activity
 } from 'lucide-react';
 import ChannelHeader from '@/components/ChannelHeader';
 import StatsGrid from '@/components/StatsGrid';
 import IssuesPanel from '@/components/IssuesPanel';
 import VideoTable from '@/components/VideoTable';
-import SearchRankings from '@/components/SearchRankings';
 import RecommendationsPanel from '@/components/RecommendationsPanel';
 import EngagementChart from '@/components/EngagementChart';
 import NotificationManager from '@/components/NotificationManager';
-import type { ChannelStats, VideoStats, IssueCheck } from '@/lib/youtube';
+import type { ChannelStats, VideoStats, IssueCheck, IssueSummary } from '@/lib/youtube';
 
-type Tab = 'overview' | 'issues' | 'videos' | 'rankings' | 'tips';
+type Tab = 'overview' | 'issues' | 'videos' | 'tips';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: BarChart2 },
   { id: 'issues', label: 'Issues', icon: AlertTriangle },
   { id: 'videos', label: 'Video', icon: Video },
-  { id: 'rankings', label: 'Ranking', icon: Search },
   { id: 'tips', label: 'Tips', icon: Lightbulb },
 ];
 
-interface IssueSummary {
-  total: number; fixed: number; pending: number;
-  warning: number; critical: number; healthScore: number;
-}
 interface DashboardData {
   channel: ChannelStats; videos: VideoStats[];
   issues: IssueCheck[]; summary: IssueSummary;
@@ -230,7 +224,6 @@ export default function Dashboard() {
 
         {tab === 'issues' && issues.length > 0 && summary && <IssuesPanel issues={issues} summary={summary} />}
         {tab === 'videos' && videos.length > 0 && <VideoTable videos={videos} />}
-        {tab === 'rankings' && <SearchRankings />}
         {tab === 'tips' && <RecommendationsPanel />}
       </div>
 
