@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDashboardData, findSub4UnlockVideos } from '@/lib/youtube';
 import { getAccessToken, fetchYTAuthed } from '@/lib/youtubeAuth';
+import { checkModerationAuth } from '@/lib/moderationAuth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -46,7 +47,9 @@ async function scanVideoComments(videoId: string, accessToken: string): Promise<
  * maupun di komentar (termasuk komentar yang di-pin channel owner sendiri, pola paling umum
  * untuk gate-content). Read-only, tidak menghapus apa pun.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const authError = checkModerationAuth(req);
+  if (authError) return authError;
   try {
     const { data } = await getDashboardData();
     const titleDescMatches = findSub4UnlockVideos(data.videos);
@@ -82,6 +85,8 @@ export async function GET() {
  * `confirm: true` wajib ada supaya tidak ada penghapusan tidak sengaja lewat request tanpa sadar.
  */
 export async function POST(req: Request) {
+  const authError = checkModerationAuth(req);
+  if (authError) return authError;
   let body: { videoIds?: string[]; confirm?: boolean; commentText?: string };
   try {
     body = await req.json();
