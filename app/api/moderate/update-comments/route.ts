@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAccessToken, fetchYTAuthed } from '@/lib/youtubeAuth';
+import { checkModerationAuth } from '@/lib/moderationAuth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,6 +13,8 @@ export const revalidate = 0;
  * Body: { comments: { commentId: string, text: string }[], confirm: true }
  */
 export async function POST(req: Request) {
+  const authError = checkModerationAuth(req);
+  if (authError) return authError;
   let body: { comments?: { commentId: string; text: string }[]; confirm?: boolean };
   try {
     body = await req.json();
