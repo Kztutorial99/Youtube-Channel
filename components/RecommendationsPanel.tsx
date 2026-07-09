@@ -101,8 +101,8 @@ export default function RecommendationsPanel() {
         <div>
           <p className="text-sm font-bold text-white">Tips Optimasi Channel</p>
           <p className="text-[11px] text-[#8888bb] mt-0.5 leading-relaxed">
-            {RECOMMENDATIONS.filter(r => r.priority === 'critical').length} isu kritis perlu segera diperhatikan.
-            Selesaikan dari urutan paling atas.
+            Praktik umum YouTube SEO/growth — bukan hasil analisis otomatis dari data channel kamu.
+            Cek tab Issues untuk temuan yang dihitung langsung dari data channel.
           </p>
         </div>
       </div>
