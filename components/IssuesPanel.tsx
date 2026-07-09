@@ -106,7 +106,7 @@ export default function IssuesPanel({ issues, summary }: Props) {
                       <SeverityIcon severity={issue.severity} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="text-xs font-semibold text-white leading-tight truncate">{issue.name}</p>
+                          <p className="text-xs font-semibold text-white leading-tight truncate">{issue.title}</p>
                           {isOpen ? <ChevronUp className="w-3 h-3 text-[#555577] shrink-0" /> : <ChevronDown className="w-3 h-3 text-[#555577] shrink-0" />}
                         </div>
                         <div className="flex items-center gap-2">
@@ -116,7 +116,7 @@ export default function IssuesPanel({ issues, summary }: Props) {
                       </div>
                     </button>
                     {isOpen && (
-                      <div className="mt-2.5 ml-6.5 space-y-2">
+                      <div className="mt-2.5 ml-6 space-y-2">
                         <p className="text-[11px] text-[#8888bb] leading-relaxed">{issue.description}</p>
                         {issue.action && (
                           <div className="flex items-start gap-1.5 p-2.5 rounded-lg bg-brand-blue/10 border border-brand-blue/20">
@@ -124,15 +124,15 @@ export default function IssuesPanel({ issues, summary }: Props) {
                             <p className="text-[11px] text-brand-blue leading-relaxed">{issue.action}</p>
                           </div>
                         )}
-                        {issue.affectedVideos && issue.affectedVideos.length > 0 && (
+                        {issue.affectedItems && issue.affectedItems.length > 0 && (
                           <div className="mt-1.5">
-                            <p className="text-[10px] text-[#555577] mb-1.5 font-medium">{issue.affectedVideos.length} video terdampak:</p>
+                            <p className="text-[10px] text-[#555577] mb-1.5 font-medium">{issue.affectedItems.length} item terdampak:</p>
                             <div className="space-y-1">
-                              {issue.affectedVideos.slice(0, 3).map((v, i) => (
+                              {issue.affectedItems.slice(0, 3).map((v, i) => (
                                 <p key={i} className="text-[10px] text-[#8888bb] truncate bg-white/3 px-2 py-1 rounded">{v}</p>
                               ))}
-                              {issue.affectedVideos.length > 3 && (
-                                <p className="text-[10px] text-[#555577]">+{issue.affectedVideos.length - 3} lainnya</p>
+                              {issue.affectedItems.length > 3 && (
+                                <p className="text-[10px] text-[#555577]">+{issue.affectedItems.length - 3} lainnya</p>
                               )}
                             </div>
                           </div>
