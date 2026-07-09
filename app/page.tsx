@@ -33,10 +33,11 @@ interface IssueSummary {
 interface DashboardData {
   channel: ChannelStats; videos: VideoStats[];
   issues: IssueCheck[]; summary: IssueSummary;
+  timestamp: string;
 }
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => r.json()).then(r => r.data as DashboardData);
+  fetch(url).then(r => r.json()).then(r => r as { data: DashboardData; timestamp: string }).then(r => ({ ...r.data, timestamp: r.timestamp }));
 
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('overview');
@@ -56,6 +57,7 @@ export default function Dashboard() {
   const videos = data?.videos ?? [];
   const issues = data?.issues ?? [];
   const summary = data?.summary ?? null;
+  const lastSync = data?.timestamp ?? new Date().toISOString();
 
   const pendingCount = issues.filter(i => i.status === 'pending').length;
   const criticalCount = issues.filter(i => i.severity === 'critical' && i.status !== 'fixed').length;
@@ -103,7 +105,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#0a0a14] flex flex-col max-w-lg mx-auto">
-      {/* Notification manager — invisible, handles push permission + alerts */}
       <NotificationManager issues={issues} />
 
       {/* Header */}
@@ -132,7 +133,7 @@ export default function Dashboard() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 pt-3 pb-24">
-        {channel && <ChannelHeader channel={channel} isValidating={isValidating} />}
+        {channel && <ChannelHeader channel={channel} lastSync={lastSync} />}
 
         {criticalCount > 0 && (
           <button onClick={() => setTab('issues')}
