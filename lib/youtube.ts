@@ -395,6 +395,38 @@ Kalau video ini membantu, jangan lupa LIKE, COMMENT, dan SUBSCRIBE!
   return issues; // Return semua — filtering fixed dilakukan di api/data route
 }
 
+/** Deteksi variasi penulisan "sub4unlock" (gate-content: konten dikunci sampai subscribe) di judul/deskripsi. */
+const SUB4UNLOCK_PATTERNS: RegExp[] = [
+  /sub\s*4\s*unlock/i,
+  /subs?\s*4\s*unlock/i,
+  /subscribe\s*(to|untuk|dulu)?\s*unlock/i,
+  /sub\s*unlock/i,
+  /s4u\b/i,
+  /subs4unlock/i,
+];
+
+export interface Sub4UnlockMatch {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string;
+  matchedIn: ('title' | 'description')[];
+}
+
+/** Cari semua video publik yang judul/deskripsinya mengindikasikan gimmick "sub4unlock". */
+export function findSub4UnlockVideos(videos: VideoStats[]): Sub4UnlockMatch[] {
+  const matches: Sub4UnlockMatch[] = [];
+  for (const v of videos) {
+    const matchedIn: ('title' | 'description')[] = [];
+    if (SUB4UNLOCK_PATTERNS.some(p => p.test(v.title))) matchedIn.push('title');
+    if (SUB4UNLOCK_PATTERNS.some(p => p.test(v.description))) matchedIn.push('description');
+    if (matchedIn.length > 0) {
+      matches.push({ id: v.id, title: v.title, url: `https://youtu.be/${v.id}`, publishedAt: v.publishedAt, matchedIn });
+    }
+  }
+  return matches;
+}
+
 export interface DashboardData {
   channel: ChannelStats;
   videos: VideoStats[];
