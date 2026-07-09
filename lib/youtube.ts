@@ -49,6 +49,7 @@ export interface IssueCheck {
   status: 'fixed' | 'pending' | 'warning';
   affectedCount?: number;
   affectedItems?: string[];
+  affectedVideoIds?: string[];
   action: string;
   checkFn?: string;
 }
@@ -92,7 +93,6 @@ export async function getChannelStats(): Promise<ChannelStats> {
 }
 
 export async function getAllVideos(): Promise<VideoStats[]> {
-  // Step 1: get all video IDs from uploads playlist
   const channelRes = await fetch(
     `${BASE_URL}/channels?part=contentDetails&id=${CHANNEL_ID}&key=${API_KEY}`,
     { next: { revalidate: 60 } }
@@ -114,43 +114,47 @@ export async function getAllVideos(): Promise<VideoStats[]> {
     pageToken = playlistData.nextPageToken || '';
   } while (pageToken);
 
-  // Step 2: get details in batches of 50
   const videos: VideoStats[] = [];
   for (let i = 0; i < videoIds.length; i += 50) {
     const batch = videoIds.slice(i, i + 50);
-    const detailRes = await fetch(
+    const res = await fetch(
       `${BASE_URL}/videos?part=snippet,statistics,contentDetails,status&id=${batch.join(',')}&key=${API_KEY}`,
       { next: { revalidate: 60 } }
     );
-    const detailData = await detailRes.json();
-    for (const v of detailData.items || []) {
-      const durationSecs = parseDuration(v.contentDetails?.duration || 'PT0S');
+    const data = await res.json();
+    for (const v of data.items || []) {
+      const durationSec = parseDuration(v.contentDetails?.duration || 'PT0S');
+      const views = parseInt(v.statistics?.viewCount || '0');
       const likes = parseInt(v.statistics?.likeCount || '0');
       const comments = parseInt(v.statistics?.commentCount || '0');
-      const views = parseInt(v.statistics?.viewCount || '0');
-      const eng = views > 0 ? ((likes + comments) / views) * 100 : 0;
-      const published = new Date(v.snippet.publishedAt);
-      const daysSince = Math.floor((Date.now() - published.getTime()) / (1000 * 60 * 60 * 24));
-      const isEngagementDisabled = views > 100 && likes === 0 && comments === 0;
+      const engRate = views > 0 ? parseFloat(((likes + comments) / views * 100).toFixed(2)) : 0;
+      const publishedAt = v.snippet?.publishedAt || '';
+      const daysSince = publishedAt
+        ? Math.floor((Date.now() - new Date(publishedAt).getTime()) / 86400000)
+        : 0;
+      const isEngDisabled =
+        v.statistics?.likeCount === undefined &&
+        v.statistics?.commentCount === undefined &&
+        views > 500;
 
       videos.push({
         id: v.id,
-        title: v.snippet.title,
-        description: v.snippet.description || '',
-        thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.default?.url || '',
-        publishedAt: v.snippet.publishedAt,
-        duration: formatDuration(durationSecs),
-        durationSeconds: durationSecs,
+        title: v.snippet?.title || '',
+        description: v.snippet?.description || '',
+        thumbnail: v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url || '',
+        publishedAt,
+        duration: formatDuration(durationSec),
+        durationSeconds: durationSec,
         views,
         likes,
         comments,
-        engagementRate: Math.round(eng * 100) / 100,
-        tags: v.snippet.tags || [],
-        hasTags: !!(v.snippet.tags && v.snippet.tags.length > 0),
-        defaultLanguage: v.snippet.defaultLanguage || '',
-        hasLanguage: !!(v.snippet.defaultLanguage),
+        engagementRate: engRate,
+        tags: v.snippet?.tags || [],
+        hasTags: !!(v.snippet?.tags && v.snippet.tags.length > 0),
+        defaultLanguage: v.snippet?.defaultLanguage || v.snippet?.defaultAudioLanguage || '',
+        hasLanguage: !!(v.snippet?.defaultLanguage || v.snippet?.defaultAudioLanguage),
         status: v.status?.privacyStatus || 'public',
-        isEngagementDisabled,
+        isEngagementDisabled: isEngDisabled,
         daysSinceUpload: daysSince,
         playlistIds: [],
       });
@@ -168,11 +172,9 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
   const lowEngVideos = publicVideos.filter(v => v.engagementRate < 1.0 && v.views > 1000 && !v.isEngagementDisabled);
   const longVideos = publicVideos.filter(v => v.durationSeconds > 600 && v.views < 10000);
 
-  // Typo checks
   const typoPatterns = [/\bAcces\b/i, /\bSecript\b/i, /\bVerssion\b/i, /\bErorr\b/i, /\bFree tool\b/i];
   const typoVideos = publicVideos.filter(v => typoPatterns.some(p => p.test(v.title)));
 
-  // Duplicate title detection
   const titleMap: Record<string, VideoStats[]> = {};
   for (const v of publicVideos) {
     const norm = v.title.toLowerCase().replace(/\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}|\d+)\s*/gi, ' ').trim();
@@ -181,14 +183,13 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
   }
   const dupTitles = Object.values(titleMap).filter(g => g.length > 1).flat();
 
-  // No description check
   const noDescVideos = publicVideos.filter(v => !v.description || v.description.trim().length < 50);
 
-  // Last upload check
-  const daysSinceLastUpload = Math.min(...publicVideos.map(v => v.daysSinceUpload));
+  const daysSinceLastUpload = publicVideos.length > 0
+    ? Math.min(...publicVideos.map(v => v.daysSinceUpload))
+    : 999;
   const isUploadStale = daysSinceLastUpload > 60;
 
-  // Stale 2025/2026 content
   const has2026Content = publicVideos.some(v =>
     /2025|2026/.test(v.title) && new Date(v.publishedAt).getFullYear() >= 2025
   );
@@ -215,12 +216,13 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
     {
       id: 'video-typos',
       category: 'SEO Judul',
-      title: `Typo di Judul Video`,
+      title: 'Typo di Judul Video',
       description: 'Judul dengan typo terlihat tidak profesional dan bisa menurunkan CTR.',
       severity: typoVideos.length > 0 ? 'high' : 'low',
       status: typoVideos.length === 0 ? 'fixed' : 'pending',
       affectedCount: typoVideos.length,
       affectedItems: typoVideos.map(v => v.title),
+      affectedVideoIds: typoVideos.map(v => v.id),
       action: 'Edit judul langsung di YouTube Studio atau via API',
     },
     {
@@ -232,6 +234,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       status: dupTitles.length === 0 ? 'fixed' : 'pending',
       affectedCount: dupTitles.length,
       affectedItems: dupTitles.map(v => v.title),
+      affectedVideoIds: dupTitles.map(v => v.id),
       action: 'Tambahkan suffix unik (bulan/tahun/versi) ke setiap judul',
     },
     {
@@ -243,6 +246,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       status: noTagVideos.length === 0 ? 'fixed' : 'pending',
       affectedCount: noTagVideos.length,
       affectedItems: noTagVideos.map(v => v.title),
+      affectedVideoIds: noTagVideos.map(v => v.id),
       action: 'Tambahkan tags relevan via YouTube Studio atau API',
     },
     {
@@ -254,6 +258,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       status: noLangVideos.length === 0 ? 'fixed' : 'pending',
       affectedCount: noLangVideos.length,
       affectedItems: noLangVideos.map(v => v.title),
+      affectedVideoIds: noLangVideos.map(v => v.id),
       action: 'Set defaultLanguage ke "id" via API atau YouTube Studio',
     },
     {
@@ -265,6 +270,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       status: engDisabledVideos.length === 0 ? 'fixed' : 'pending',
       affectedCount: engDisabledVideos.length,
       affectedItems: engDisabledVideos.map(v => `${v.title} (${v.views.toLocaleString()} views)`),
+      affectedVideoIds: engDisabledVideos.map(v => v.id),
       action: 'Private atau hapus video ini — tidak berkontribusi ke engagement channel',
     },
     {
@@ -275,7 +281,8 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       severity: lowEngVideos.length > 3 ? 'high' : lowEngVideos.length > 0 ? 'medium' : 'low',
       status: lowEngVideos.length === 0 ? 'fixed' : 'warning',
       affectedCount: lowEngVideos.length,
-      affectedItems: lowEngVideos.map(v => `${v.title} (${v.engagementRate}%)`),
+      affectedItems: lowEngVideos.map(v => `${v.title} (${v.engagementRate.toFixed(1)}%)`),
+      affectedVideoIds: lowEngVideos.map(v => v.id),
       action: 'Update deskripsi, thumbnail, dan judul untuk meningkatkan CTR',
     },
     {
@@ -284,7 +291,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       title: 'Frekuensi Upload',
       description: isUploadStale
         ? `Upload terakhir ${daysSinceLastUpload} hari yang lalu — algoritma sudah "tidur". Target 2x/minggu.`
-        : `Upload terakhir ${daysSinceLastUpload} hari yang lalu — masih aktif. ✅`,
+        : `Upload terakhir ${daysSinceLastUpload} hari yang lalu — masih aktif.`,
       severity: isUploadStale ? 'critical' : 'low',
       status: isUploadStale ? 'pending' : 'fixed',
       action: 'Upload 2x/minggu — Minggu & Selasa jam 13:00 WIB',
@@ -293,7 +300,7 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       id: 'fresh-content-2026',
       category: 'Konten',
       title: 'Konten 2025/2026 (Keyword Fresh)',
-      description: 'Kompetitor dengan video 2025–2026 mulai menggeser ranking lu di keyword utama.',
+      description: 'Kompetitor dengan video 2025–2026 mulai menggeser ranking di keyword utama.',
       severity: has2026Content ? 'low' : 'high',
       status: has2026Content ? 'fixed' : 'pending',
       action: 'Buat video: "Termux Mod 2026", "ZArchiver Android 15", "Install Termux 2026 Tanpa Error"',
@@ -306,14 +313,15 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       severity: noDescVideos.length > 5 ? 'medium' : 'low',
       status: noDescVideos.length === 0 ? 'fixed' : noDescVideos.length <= 3 ? 'warning' : 'pending',
       affectedCount: noDescVideos.length,
-      affectedItems: noDescVideos.slice(0, 5).map(v => v.title),
+      affectedItems: noDescVideos.slice(0, 10).map(v => v.title),
+      affectedVideoIds: noDescVideos.slice(0, 10).map(v => v.id),
       action: 'Tambah deskripsi lengkap (keyword + link + CTA) di setiap video',
     },
     {
       id: 'captions',
       category: 'Aksesibilitas',
       title: 'Caption / Subtitle Video',
-      description: 'Caption meningkatkan watch time, aksesibilitas, dan ranking di search. Harus dilakukan manual di YouTube Studio.',
+      description: 'Caption meningkatkan watch time, aksesibilitas, dan ranking di search.',
       severity: 'medium',
       status: 'pending',
       action: 'YouTube Studio → Subtitles → Auto-generate → Edit → Publish (untuk tiap video)',
@@ -322,11 +330,12 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
       id: 'long-videos-low-views',
       category: 'Konten',
       title: 'Video Panjang (>10 menit) dengan Views Rendah',
-      description: 'Data menunjukkan video 10+ menit rata-rata dapat 12K views vs 5–8 menit yang dapat 24K+.',
+      description: 'Video 10+ menit rata-rata dapat 12K views vs 5–8 menit yang dapat 24K+.',
       severity: longVideos.length > 0 ? 'medium' : 'low',
       status: longVideos.length === 0 ? 'fixed' : 'warning',
       affectedCount: longVideos.length,
       affectedItems: longVideos.map(v => `${v.title} (${v.duration}, ${v.views.toLocaleString()} views)`),
+      affectedVideoIds: longVideos.map(v => v.id),
       action: 'Target durasi 5–8 menit untuk video baru. Edit versi pendek dari video yang ada.',
     },
     {
@@ -340,5 +349,6 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
     },
   ];
 
-  return issues;
+  // Only return non-fixed issues — fixed = validated by YouTube API, langsung hapus dari list
+  return issues.filter(i => i.status !== 'fixed');
 }
