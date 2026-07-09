@@ -22,7 +22,7 @@ function BadgeRow({ video }: { video: VideoStats }) {
     <div className="flex flex-wrap gap-1.5 mt-2">
       {video.isEngagementDisabled ? (
         <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20 font-medium">
-          <AlertTriangle className="w-2.5 h-2.5" /> Engagement Disabled
+          <AlertTriangle className="w-2.5 h-2.5" /> Engagement Off
         </span>
       ) : (
         <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-green/15 text-brand-green border border-brand-green/20 font-medium">
@@ -37,16 +37,6 @@ function BadgeRow({ video }: { video: VideoStats }) {
       {!video.hasLanguage && (
         <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20 font-medium">
           <Globe className="w-2.5 h-2.5" /> No Language
-        </span>
-      )}
-      {video.ctr !== undefined && video.ctr === 0 && (
-        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20 font-medium">
-          <AlertTriangle className="w-2.5 h-2.5" /> CTR 0%
-        </span>
-      )}
-      {video.ctr !== undefined && video.ctr > 0 && (
-        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-green/15 text-brand-green border border-brand-green/20 font-medium">
-          <CheckCircle2 className="w-2.5 h-2.5" /> CTR {video.ctr}%
         </span>
       )}
     </div>
@@ -65,7 +55,6 @@ export default function VideoTable({ videos }: { videos: VideoStats[] }) {
 
   return (
     <div className="space-y-3 pb-4">
-      {/* Sort */}
       <div className="flex gap-2">
         {(['views','engagement','date'] as const).map(s => (
           <button key={s} onClick={() => setSortBy(s)}
@@ -75,7 +64,6 @@ export default function VideoTable({ videos }: { videos: VideoStats[] }) {
         ))}
       </div>
 
-      {/* Video list */}
       <div className="space-y-2">
         {sorted.map((video, idx) => {
           const isOpen = expanded === video.id;
@@ -84,7 +72,6 @@ export default function VideoTable({ videos }: { videos: VideoStats[] }) {
             <div key={video.id}
               className={`glass rounded-xl border overflow-hidden transition-all ${hasIssue ? 'border-yellow-500/15' : 'border-white/5'}`}>
               <button className="w-full text-left p-3 flex gap-3" onClick={() => setExpanded(isOpen ? null : video.id)}>
-                {/* Thumbnail */}
                 <div className="relative shrink-0 w-[72px] h-[41px] rounded-lg overflow-hidden bg-white/5">
                   {video.thumbnail ? (
                     <Image src={video.thumbnail} alt={video.title} fill className="object-cover" sizes="72px" />
@@ -103,13 +90,18 @@ export default function VideoTable({ videos }: { videos: VideoStats[] }) {
                   )}
                 </div>
 
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-white leading-tight line-clamp-2 mb-1.5">{video.title}</p>
                   <div className="flex items-center gap-2 text-[10px] text-[#555577]">
-                    <span className="flex items-center gap-0.5"><Eye className="w-2.5 h-2.5" /> {video.views >= 1000 ? `${(video.views/1000).toFixed(1)}k` : video.views}</span>
-                    <span className="flex items-center gap-0.5"><ThumbsUp className="w-2.5 h-2.5" /> {video.likes >= 1000 ? `${(video.likes/1000).toFixed(1)}k` : video.likes}</span>
-                    <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" /> {video.daysSinceUpload}h lalu</span>
+                    <span className="flex items-center gap-0.5">
+                      <Eye className="w-2.5 h-2.5" /> {video.views >= 1000 ? `${(video.views/1000).toFixed(1)}k` : video.views}
+                    </span>
+                    <span className="flex items-center gap-0.5">
+                      <ThumbsUp className="w-2.5 h-2.5" /> {video.likes >= 1000 ? `${(video.likes/1000).toFixed(1)}k` : video.likes}
+                    </span>
+                    <span className="flex items-center gap-0.5">
+                      <Clock className="w-2.5 h-2.5" /> {video.daysSinceUpload}h lalu
+                    </span>
                   </div>
                 </div>
                 {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-[#555577] shrink-0 mt-1" /> : <ChevronDown className="w-3.5 h-3.5 text-[#555577] shrink-0 mt-1" />}
@@ -122,24 +114,22 @@ export default function VideoTable({ videos }: { videos: VideoStats[] }) {
                     <StatPill icon={ThumbsUp} value={video.likes.toLocaleString('id-ID')} label="Likes" />
                     <StatPill icon={MessageSquare} value={video.comments.toLocaleString('id-ID')} label="Komentar" />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 bg-white/5 rounded-lg p-2">
-                      <p className="text-[9px] text-[#555577] mb-1">Engagement Rate</p>
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-green"
-                            style={{ width: `${Math.min(video.engagementRate * 10, 100)}%` }} />
-                        </div>
-                        <span className="text-[10px] font-bold text-white">{video.engagementRate}%</span>
+                  <div className="bg-white/5 rounded-lg p-2">
+                    <p className="text-[9px] text-[#555577] mb-1">Engagement Rate</p>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-green"
+                          style={{ width: `${Math.min(video.engagementRate * 10, 100)}%` }} />
                       </div>
+                      <span className="text-[10px] font-bold text-white">{video.engagementRate}%</span>
                     </div>
-                    {video.duration && (
-                      <div className="bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-[#555577] mb-0.5">Durasi</p>
-                        <p className="text-[11px] font-bold text-white">{video.duration}</p>
-                      </div>
-                    )}
                   </div>
+                  {video.duration && (
+                    <div className="bg-white/5 rounded-lg p-2 inline-block">
+                      <p className="text-[9px] text-[#555577] mb-0.5">Durasi</p>
+                      <p className="text-[11px] font-bold text-white">{video.duration}</p>
+                    </div>
+                  )}
                   <BadgeRow video={video} />
                 </div>
               )}
