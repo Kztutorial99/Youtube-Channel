@@ -2,6 +2,20 @@ const API_KEY = process.env.YOUTUBE_API_KEY;
 const CHANNEL_ID = 'UCRaVHUXQGVAH7Gof7kixIoQ';
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
+/** fetch + validasi response YouTube API. Melempar error yang jelas kalau gagal, bukan crash acak. */
+async function fetchYT(url: string): Promise<any> {
+  const res = await fetch(url, { next: { revalidate: 60 } });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`YouTube API error ${res.status}: ${body.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  if (data.error) {
+    throw new Error(`YouTube API error: ${data.error.message || 'unknown error'}`);
+  }
+  return data;
+}
+
 export interface ChannelStats {
   id: string; title: string; description: string; customUrl: string;
   publishedAt: string; thumbnail: string; subscribers: number; views: number;
@@ -15,7 +29,12 @@ export interface VideoStats {
   views: number; likes: number; comments: number; engagementRate: number;
   tags: string[]; hasTags: boolean; defaultLanguage: string; hasLanguage: boolean;
   status: 'public' | 'unlisted' | 'private'; isEngagementDisabled: boolean;
-  daysSinceUpload: number; playlistIds: string[];
+  daysSinceUpload: number; playlistIds: string[]; hasCaptions: boolean;
+}
+
+export interface IssueSummary {
+  total: number; fixed: number; pending: number;
+  warning: number; critical: number; healthScore: number;
 }
 
 export interface IssueCheck {
@@ -27,7 +46,24 @@ export interface IssueCheck {
   suggestion?: string;
   /** Label kotak saran, misal "Tags Siap Pakai" / "Template Deskripsi" */
   suggestionLabel?: string;
+  /** false = tidak bisa diverifikasi otomatis lewat YouTube API (butuh cek manual), tidak dihitung ke health score */
+  verified?: boolean;
   action: string; checkFn?: string;
+}
+
+/** Hitung summary dari daftar issue. Hanya issue yang verified (default true) dihitung ke health score. */
+export function computeSummary(issues: IssueCheck[]): IssueSummary {
+  const verifiable = issues.filter(i => i.verified !== false);
+  const fixedCount = verifiable.filter(i => i.status === 'fixed').length;
+  const totalChecks = verifiable.length;
+  return {
+    total: issues.length,
+    fixed: issues.filter(i => i.status === 'fixed').length,
+    pending: issues.filter(i => i.status === 'pending').length,
+    warning: issues.filter(i => i.status === 'warning').length,
+    critical: issues.filter(i => i.severity === 'critical' && i.status !== 'fixed').length,
+    healthScore: Math.round((fixedCount / Math.max(totalChecks, 1)) * 100),
+  };
 }
 
 function parseDuration(iso: string): number {
@@ -45,9 +81,9 @@ function formatDuration(seconds: number): string {
 }
 
 export async function getChannelStats(): Promise<ChannelStats> {
-  const res = await fetch(`${BASE_URL}/channels?part=snippet,statistics,brandingSettings&id=${CHANNEL_ID}&key=${API_KEY}`, { next: { revalidate: 60 } });
-  const data = await res.json();
-  const ch = data.items[0];
+  const data = await fetchYT(`${BASE_URL}/channels?part=snippet,statistics,brandingSettings&id=${CHANNEL_ID}&key=${API_KEY}`);
+  const ch = data.items?.[0];
+  if (!ch) throw new Error('Channel tidak ditemukan di YouTube API.');
   const branding = ch.brandingSettings?.channel || {};
   return {
     id: ch.id, title: ch.snippet.title, description: ch.snippet.description || '',
@@ -64,14 +100,13 @@ export async function getChannelStats(): Promise<ChannelStats> {
 }
 
 export async function getAllVideos(): Promise<VideoStats[]> {
-  const channelRes = await fetch(`${BASE_URL}/channels?part=contentDetails&id=${CHANNEL_ID}&key=${API_KEY}`, { next: { revalidate: 60 } });
-  const channelData = await channelRes.json();
-  const uploadsId = channelData.items[0].contentDetails.relatedPlaylists.uploads;
+  const channelData = await fetchYT(`${BASE_URL}/channels?part=contentDetails&id=${CHANNEL_ID}&key=${API_KEY}`);
+  const uploadsId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsId) throw new Error('Uploads playlist tidak ditemukan.');
   const videoIds: string[] = [];
   let pageToken = '';
   do {
-    const r = await fetch(`${BASE_URL}/playlistItems?part=contentDetails&playlistId=${uploadsId}&maxResults=50&pageToken=${pageToken}&key=${API_KEY}`, { next: { revalidate: 60 } });
-    const d = await r.json();
+    const d = await fetchYT(`${BASE_URL}/playlistItems?part=contentDetails&playlistId=${uploadsId}&maxResults=50&pageToken=${pageToken}&key=${API_KEY}`);
     for (const item of d.items || []) videoIds.push(item.contentDetails.videoId);
     pageToken = d.nextPageToken || '';
   } while (pageToken);
@@ -79,8 +114,7 @@ export async function getAllVideos(): Promise<VideoStats[]> {
   const videos: VideoStats[] = [];
   for (let i = 0; i < videoIds.length; i += 50) {
     const batch = videoIds.slice(i, i + 50);
-    const res = await fetch(`${BASE_URL}/videos?part=snippet,statistics,contentDetails,status&id=${batch.join(',')}&key=${API_KEY}`, { next: { revalidate: 60 } });
-    const data = await res.json();
+    const data = await fetchYT(`${BASE_URL}/videos?part=snippet,statistics,contentDetails,status&id=${batch.join(',')}&key=${API_KEY}`);
     for (const v of data.items || []) {
       const durationSec = parseDuration(v.contentDetails?.duration || 'PT0S');
       const views = parseInt(v.statistics?.viewCount || '0');
@@ -100,6 +134,7 @@ export async function getAllVideos(): Promise<VideoStats[]> {
         hasLanguage: !!(v.snippet?.defaultLanguage || v.snippet?.defaultAudioLanguage),
         status: v.status?.privacyStatus || 'public', isEngagementDisabled: isEngDisabled,
         daysSinceUpload: daysSince, playlistIds: [],
+        hasCaptions: v.contentDetails?.caption === 'true',
       });
     }
   }
@@ -115,9 +150,13 @@ export async function computeIssues(channel: ChannelStats, videos: VideoStats[])
   const longVideos = pub.filter(v => v.durationSeconds > 600 && v.views < 10000);
   const typoPatterns = [/\bAcces\b/i, /\bSecript\b/i, /\bVerssion\b/i, /\bErorr\b/i, /\bFree tool\b/i];
   const typoVideos = pub.filter(v => typoPatterns.some(p => p.test(v.title)));
+  const noCaptionVideos = pub.filter(v => !v.hasCaptions);
   const titleMap: Record<string, VideoStats[]> = {};
   for (const v of pub) {
-    const norm = v.title.toLowerCase().replace(/\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}|\d+)\s*/gi, ' ').trim();
+    const norm = v.title.toLowerCase().replace(/\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}|\d+)\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+    // Judul yang setelah normalisasi jadi terlalu pendek (misal cuma beda nomor/tahun) rawan false-positive,
+    // jadi tidak dianggap layak dibandingkan sebagai duplikat.
+    if (norm.length < 12) continue;
     titleMap[norm] = titleMap[norm] || [];
     titleMap[norm].push(v);
   }
@@ -319,8 +358,11 @@ Kalau video ini membantu, jangan lupa LIKE, COMMENT, dan SUBSCRIBE!
       category: 'Aksesibilitas',
       title: 'Caption / Subtitle Video',
       description: 'Caption meningkatkan watch time, aksesibilitas, dan ranking di search.',
-      severity: 'medium',
-      status: 'pending',
+      severity: noCaptionVideos.length > 0 ? 'medium' : 'low',
+      status: noCaptionVideos.length === 0 ? 'fixed' : 'pending',
+      affectedCount: noCaptionVideos.length,
+      affectedItems: noCaptionVideos.map(v => v.title),
+      affectedVideoIds: noCaptionVideos.map(v => v.id),
       action: 'YouTube Studio → Subtitles → pilih video → Add → Auto-generated → edit jika perlu → Publish',
       // Tidak ada suggestion — ini proses di YouTube Studio
     },
@@ -341,13 +383,50 @@ Kalau video ini membantu, jangan lupa LIKE, COMMENT, dan SUBSCRIBE!
       id: 'tos-links',
       category: 'Keamanan',
       title: 'Link subs4unlock / Gate Content di Komentar',
-      description: 'Link subs4unlock.id di komentar = pelanggaran ToS YouTube → penyebab engagement dikunci pada video tertentu.',
-      severity: 'critical',
-      status: 'pending',
+      description: 'Link subs4unlock.id di komentar bisa melanggar ToS YouTube. Item ini TIDAK dicek otomatis via API (butuh scan comment per-video yang mahal secara kuota) — cek manual secara berkala.',
+      severity: 'high',
+      status: 'warning',
+      verified: false, // tidak dihitung ke health score — belum ada bukti otomatis dari API
       action: 'YouTube Studio → Comments → filter "Contains links" → cari subs4unlock → Delete comment',
       // Tidak ada suggestion
     },
   ];
 
   return issues; // Return semua — filtering fixed dilakukan di api/data route
+}
+
+export interface DashboardData {
+  channel: ChannelStats;
+  videos: VideoStats[];
+  issues: IssueCheck[]; // semua issue, termasuk yang fixed
+}
+
+// Cache in-memory per-instance (bukan persisten lintas instance serverless — cukup untuk
+// mengurangi panggilan berulang ke YouTube API dalam window singkat, bukan solusi cache global).
+let dashboardCache: { data: DashboardData; ts: number } | null = null;
+const DASHBOARD_CACHE_TTL = 2 * 60 * 1000;
+
+/**
+ * Satu-satunya titik masuk untuk mengambil channel + video + issues.
+ * Dipakai oleh semua route (/api/data, /api/sync, /api/issues, /api/channel, /api/videos)
+ * supaya logikanya tidak terduplikasi dan hasilnya konsisten di semua endpoint.
+ */
+export async function getDashboardData(forceRefresh = false): Promise<{ data: DashboardData; cached: boolean; ts: number }> {
+  const now = Date.now();
+  if (!forceRefresh && dashboardCache && now - dashboardCache.ts < DASHBOARD_CACHE_TTL) {
+    return { data: dashboardCache.data, cached: true, ts: dashboardCache.ts };
+  }
+  try {
+    const [channel, videos] = await Promise.all([getChannelStats(), getAllVideos()]);
+    const issues = await computeIssues(channel, videos);
+    const data: DashboardData = { channel, videos, issues };
+    dashboardCache = { data, ts: now };
+    return { data, cached: false, ts: now };
+  } catch (err) {
+    if (dashboardCache) {
+      // Upstream gagal tapi masih ada cache lama — lebih baik sajikan data stale daripada error total.
+      return { data: dashboardCache.data, cached: true, ts: dashboardCache.ts };
+    }
+    throw err;
+  }
 }
