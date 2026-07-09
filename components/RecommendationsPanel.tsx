@@ -1,126 +1,144 @@
 'use client';
 
+import { Target, Flame, AlertTriangle, ChevronDown, ChevronUp, CheckCircle2, Lightbulb } from 'lucide-react';
 import { useState } from 'react';
-import { Lightbulb, Calendar, Clock, Film, Tag, ChevronDown, ChevronUp } from 'lucide-react';
 
-const recommendations = [
+interface Recommendation {
+  id: string; title: string; description: string;
+  priority: string; category: string; points: string[];
+}
+
+const RECOMMENDATIONS: Recommendation[] = [
   {
-    id: 'upload-schedule',
-    icon: Calendar,
-    color: 'text-brand-green',
-    bg: 'bg-brand-green/10 border-brand-green/20',
-    title: 'Jadwal Upload Optimal',
-    priority: '🔥 Paling Penting',
-    body: 'Data dari 27 video channel lu menunjukkan pola yang jelas:',
+    id: '1', title: 'Optimalkan Judul Video', priority: 'high',
+    category: 'SEO',
+    description: 'Judul yang kuat dengan keyword target bisa meningkatkan CTR 2-3x lipat.',
     points: [
-      '📅 Hari terbaik: Minggu (avg 52K views) & Selasa (avg 27K views)',
-      '⏰ Jam terbaik: 13:00 WIB (06:00 UTC) — avg 63K views',
-      '❌ Hindari: Jumat (avg cuma 7.5K views)',
-      '🎯 Target: 2x upload per minggu — Minggu & Selasa jam 13:00 WIB',
+      'Taruh keyword utama di 30 karakter pertama',
+      'Gunakan angka: "5 Cara", "10 Tips" lebih klik',
+      'Hindari clickbait — YouTube bisa penalti channel',
+      'Cek search volume keyword sebelum pakai',
     ],
   },
   {
-    id: 'video-duration',
-    icon: Film,
-    color: 'text-brand-blue',
-    bg: 'bg-brand-blue/10 border-brand-blue/20',
-    title: 'Durasi Video Ideal',
-    priority: '🔥 Penting',
-    body: 'Analisis durasi vs views dari seluruh video:',
+    id: '2', title: 'Konsistensi Upload', priority: 'high',
+    category: 'Pertumbuhan',
+    description: 'Algoritma YouTube sangat menyukai konsistensi. Channel aktif dapat lebih banyak distribusi.',
     points: [
-      '✅ 3–4 menit: avg 39K views (sweet spot!)',
-      '✅ 5–8 menit: avg 24.5K views',
-      '⚠️ 8–10 menit: avg 16.2K views',
-      '❌ 10+ menit: avg 12K views (drop signifikan)',
-      '→ Target durasi 5–8 menit untuk konten baru',
+      'Minimal 1x upload per minggu',
+      'Umumkan jadwal upload di Community Post',
+      'Buat konten batch — rekam 4 video sekaligus',
+      'Gunakan YouTube Scheduler untuk auto-publish',
     ],
   },
   {
-    id: 'content-ideas',
-    icon: Lightbulb,
-    color: 'text-brand-yellow',
-    bg: 'bg-brand-yellow/10 border-brand-yellow/20',
-    title: 'Ide Konten Baru (High Priority)',
-    priority: '🎯 Peluang Besar',
-    body: 'Keyword dengan kompetisi rendah dan permintaan tinggi:',
+    id: '3', title: 'Perbaiki Thumbnail', priority: 'critical',
+    category: 'CTR',
+    description: 'Thumbnail adalah iklan video kamu. CTR rendah = YouTube berhenti mempromosikan video.',
     points: [
-      '1️⃣ "Termux Mod Version Terbaru 2026 | Free Download No Password" — geser ARYA OFICIAL YT yang videonya dari 2022',
-      '2️⃣ "Cara Install Termux 2026 yang Benar (0 Error)" — keyword belum ada pemain kuat',
-      '3️⃣ "ZArchiver Pro Android 15 + Shizuku 2026" — kompetisi sangat rendah',
-      '4️⃣ "FULL SCRIPT Termux 2026 — Semua Tools Terbaru" — request terbanyak dari komentar',
-      '5️⃣ "Recovery Akun Facebook Kena Hack Pakai Termux" — diminta langsung penonton',
+      'Ukuran ideal: 1280x720px (16:9)',
+      'Gunakan teks max 6 kata yang kontras',
+      'Wajah dengan ekspresi jelas terbukti meningkatkan CTR',
+      'A/B test thumbnail berbeda di video baru',
     ],
   },
   {
-    id: 'thumbnail-tips',
-    icon: Tag,
-    color: 'text-brand-purple',
-    bg: 'bg-brand-purple/10 border-brand-purple/20',
-    title: 'Thumbnail & CTR Tips',
-    priority: '⚠️ Perlu Perbaikan',
-    body: 'CTR rendah = algoritma tidak push video. Tips dari data channel lu:',
+    id: '4', title: 'Tingkatkan Retention', priority: 'medium',
+    category: 'Watch Time',
+    description: 'Audience retention di atas 50% adalah kunci video masuk rekomendasi.',
     points: [
-      '🎨 Pakai template konsisten — warna merah/hitam/kuning yang bold',
-      '📝 Teks max 4 kata di thumbnail — besar dan terbaca di mobile',
-      '😮 Ekspresi wajah atau visual "wow" meningkatkan CTR 30–40%',
-      '🔢 Cantumkan versi/tahun di thumbnail untuk konten update',
-      '📱 Preview thumbnail di ukuran 60x40px — test apakah terbaca di HP',
+      'Langsung masuk ke inti di 30 detik pertama',
+      'Gunakan pattern interrupt setiap 2-3 menit',
+      'Tambahkan end screen di 20 detik terakhir',
+      'Analisis drop-off point di YouTube Analytics',
     ],
   },
   {
-    id: 'engagement-tips',
-    icon: Clock,
-    color: 'text-brand-orange',
-    bg: 'bg-brand-orange/10 border-brand-orange/20',
-    title: 'Boost Engagement Rate',
-    priority: '⚠️ Perlu Perhatian',
-    body: 'Engagement rate rata-rata channel 1.42% — bisa ditingkatkan ke 2%+:',
+    id: '5', title: 'Aktifkan Community Post', priority: 'medium',
+    category: 'Engagement',
+    description: 'Community Post bisa menjaga engagement antara jadwal upload dan membangun hubungan dengan subscriber.',
     points: [
-      '📢 CTA di detik ke-30: "Kalau video ini membantu, like dulu bang!" — sebelum penonton skip',
-      '❓ Tanya di akhir video: "Version mana yang kalian pakai? Komen di bawah!"',
-      '📌 Pin komentar sendiri dengan link download terbaru — jaga penonton tetap engage',
-      '🗂️ Buat pinned comment dengan timestamp section — turunkan bounce, naikkan watch time',
-      '💬 Reply semua komentar dalam 24 jam pertama — algoritma YouTube suka ini',
+      'Post 2-3x per minggu di antara jadwal video',
+      'Gunakan polling — dapat respons 5x lebih tinggi',
+      'Share behind the scene konten upcoming',
+      'Reply komentar Community Post dalam 1 jam pertama',
     ],
   },
 ];
 
+function PriorityBadge({ priority }: { priority: string }) {
+  if (priority === 'critical') return (
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/25">
+      <Flame className="w-2.5 h-2.5" /> Kritis
+    </span>
+  );
+  if (priority === 'high') return (
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/25">
+      <Target className="w-2.5 h-2.5" /> Penting
+    </span>
+  );
+  return (
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/25">
+      <AlertTriangle className="w-2.5 h-2.5" /> Normal
+    </span>
+  );
+}
+
 export default function RecommendationsPanel() {
-  const [expanded, setExpanded] = useState<string | null>('upload-schedule');
+  const [expanded, setExpanded] = useState<string | null>('3');
+
+  const sorted = [...RECOMMENDATIONS].sort((a, b) => {
+    const order = { critical: 0, high: 1, medium: 2, low: 3 };
+    return (order[a.priority as keyof typeof order] ?? 9) - (order[b.priority as keyof typeof order] ?? 9);
+  });
 
   return (
-    <div className="mb-4 animate-fade-in">
-      <div className="space-y-2">
-        {recommendations.map(rec => {
-          const isOpen = expanded === rec.id;
-          const Icon = rec.icon;
+    <div className="space-y-3 pb-4">
+      <div className="glass rounded-xl border border-white/5 p-4 flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-brand-blue/20 flex items-center justify-center shrink-0">
+          <Lightbulb className="w-4.5 h-4.5 text-brand-blue" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-white">Tips Optimasi Channel</p>
+          <p className="text-[11px] text-[#8888bb] mt-0.5 leading-relaxed">
+            {RECOMMENDATIONS.filter(r => r.priority === 'critical').length} isu kritis perlu segera diperhatikan.
+            Selesaikan dari urutan paling atas.
+          </p>
+        </div>
+      </div>
 
+      <div className="space-y-2">
+        {sorted.map((rec, idx) => {
+          const isOpen = expanded === rec.id;
           return (
-            <div key={rec.id} className={`glass rounded-xl border overflow-hidden ${rec.bg}`}>
-              <button
-                onClick={() => setExpanded(isOpen ? null : rec.id)}
-                className="w-full flex items-center gap-3 p-3 text-left"
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${rec.bg}`}>
-                  <Icon className={`w-4 h-4 ${rec.color}`} />
-                </div>
+            <div key={rec.id} className={`glass rounded-xl border overflow-hidden transition-all ${rec.priority === 'critical' ? 'border-red-500/25' : 'border-white/5'}`}>
+              <button className="w-full text-left p-3.5 flex items-center gap-3"
+                onClick={() => setExpanded(isOpen ? null : rec.id)}>
+                <span className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-[11px] font-bold text-[#8888bb] shrink-0">
+                  {idx + 1}
+                </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white">{rec.title}</p>
-                  <p className="text-[10px] text-[#8888bb]">{rec.priority}</p>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <p className="text-xs font-semibold text-white">{rec.title}</p>
+                    <PriorityBadge priority={rec.priority} />
+                  </div>
+                  <span className="text-[10px] text-[#555577] font-medium px-1.5 py-0.5 bg-white/5 rounded">{rec.category}</span>
                 </div>
                 {isOpen ? <ChevronUp className="w-4 h-4 text-[#555577] shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#555577] shrink-0" />}
               </button>
-
               {isOpen && (
-                <div className="px-3 pb-3 border-t border-white/5 pt-3 animate-slide-up">
-                  <p className="text-xs text-[#aaaacc] mb-2">{rec.body}</p>
-                  <ul className="space-y-1.5">
+                <div className="px-3.5 pb-3.5 space-y-3 border-t border-white/5 pt-3">
+                  <p className="text-[11px] text-[#8888bb] leading-relaxed">{rec.description}</p>
+                  <div className="space-y-2">
                     {rec.points.map((point, i) => (
-                      <li key={i} className="text-[11px] text-[#ccccee] leading-relaxed pl-2 border-l-2 border-white/10">
-                        {point}
-                      </li>
+                      <div key={i} className="flex items-start gap-2.5">
+                        <div className="w-4 h-4 rounded-full bg-brand-blue/20 flex items-center justify-center shrink-0 mt-0.5">
+                          <CheckCircle2 className="w-2.5 h-2.5 text-brand-blue" />
+                        </div>
+                        <p className="text-[11px] text-[#aaaacc] leading-relaxed">{point}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
             </div>
