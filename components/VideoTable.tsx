@@ -2,7 +2,11 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Eye, ThumbsUp, MessageSquare, Clock, Tag, Globe } from 'lucide-react';
+import {
+  AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
+  Eye, ThumbsUp, MessageSquare, Clock, Tag, Globe,
+  ExternalLink, Pencil
+} from 'lucide-react';
 import type { VideoStats } from '@/lib/youtube';
 
 function StatPill({ icon: Icon, value, label }: { icon: React.ElementType; value: string | number; label: string }) {
@@ -25,7 +29,7 @@ function BadgeRow({ video }: { video: VideoStats }) {
           <AlertTriangle className="w-2.5 h-2.5" /> Engagement Off
         </span>
       ) : (
-        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-green/15 text-brand-green border border-brand-green/20 font-medium">
+        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-[#00d4aa]/15 text-[#00d4aa] border border-[#00d4aa]/20 font-medium">
           <CheckCircle2 className="w-2.5 h-2.5" /> Engagement OK
         </span>
       )}
@@ -68,6 +72,9 @@ export default function VideoTable({ videos }: { videos: VideoStats[] }) {
         {sorted.map((video, idx) => {
           const isOpen = expanded === video.id;
           const hasIssue = video.isEngagementDisabled || !video.hasTags || !video.hasLanguage;
+          const ytUrl = `https://www.youtube.com/watch?v=${video.id}`;
+          const studioUrl = `https://studio.youtube.com/video/${video.id}/edit`;
+
           return (
             <div key={video.id}
               className={`glass rounded-xl border overflow-hidden transition-all ${hasIssue ? 'border-yellow-500/15' : 'border-white/5'}`}>
@@ -114,23 +121,40 @@ export default function VideoTable({ videos }: { videos: VideoStats[] }) {
                     <StatPill icon={ThumbsUp} value={video.likes.toLocaleString('id-ID')} label="Likes" />
                     <StatPill icon={MessageSquare} value={video.comments.toLocaleString('id-ID')} label="Komentar" />
                   </div>
+
                   <div className="bg-white/5 rounded-lg p-2">
                     <p className="text-[9px] text-[#555577] mb-1">Engagement Rate</p>
                     <div className="flex items-center gap-1.5">
                       <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-green"
+                        <div className="h-full rounded-full bg-gradient-to-r from-[#4a9eff] to-[#00d4aa]"
                           style={{ width: `${Math.min(video.engagementRate * 10, 100)}%` }} />
                       </div>
                       <span className="text-[10px] font-bold text-white">{video.engagementRate}%</span>
                     </div>
                   </div>
+
                   {video.duration && (
                     <div className="bg-white/5 rounded-lg p-2 inline-block">
                       <p className="text-[9px] text-[#555577] mb-0.5">Durasi</p>
                       <p className="text-[11px] font-bold text-white">{video.duration}</p>
                     </div>
                   )}
+
                   <BadgeRow video={video} />
+
+                  {/* Tombol aksi cepat */}
+                  <div className="flex gap-2 pt-1">
+                    <a href={ytUrl} target="_blank" rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 text-[11px] font-semibold hover:bg-red-500/25 transition-colors">
+                      <ExternalLink className="w-3 h-3" /> Buka YouTube
+                    </a>
+                    <a href={studioUrl} target="_blank" rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#4a9eff]/15 text-[#4a9eff] border border-[#4a9eff]/20 text-[11px] font-semibold hover:bg-[#4a9eff]/25 transition-colors">
+                      <Pencil className="w-3 h-3" /> Edit di Studio
+                    </a>
+                  </div>
                 </div>
               )}
             </div>
