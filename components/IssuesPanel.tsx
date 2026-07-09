@@ -2,9 +2,10 @@
 
 import {
   Clock, AlertTriangle, AlertCircle, Lightbulb,
-  ChevronDown, ChevronUp, ExternalLink, CheckCircle2, Youtube
+  ChevronDown, ChevronUp, ExternalLink, CheckCircle2,
+  Youtube, Copy, Check
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { IssueCheck } from '@/lib/youtube';
 
 interface IssueSummary {
@@ -37,16 +38,47 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [text]);
+
+  return (
+    <button onClick={handleCopy}
+      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border shrink-0 ${
+        copied
+          ? 'bg-[#00d4aa]/20 text-[#00d4aa] border-[#00d4aa]/30'
+          : 'bg-white/8 text-[#8888bb] border-white/10 hover:bg-white/15 hover:text-white'
+      }`}>
+      {copied ? <><Check className="w-3 h-3" /> Tersalin!</> : <><Copy className="w-3 h-3" /> Salin</>}
+    </button>
+  );
+}
+
 export default function IssuesPanel({ issues, summary }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'warning'>('all');
   const [showAllVideos, setShowAllVideos] = useState<Record<string, boolean>>({});
 
-  // Hanya tampilkan yang belum fix (fixed sudah difilter di server — validated by YouTube API)
   const activeIssues = issues.filter(i => i.status !== 'fixed');
   const filtered = filter === 'all' ? activeIssues : activeIssues.filter(i => i.status === filter);
   const categories = [...new Set(activeIssues.map(i => i.category))];
-
   const pendingCount = activeIssues.filter(i => i.status === 'pending').length;
   const warningCount = activeIssues.filter(i => i.status === 'warning').length;
 
@@ -64,10 +96,8 @@ export default function IssuesPanel({ issues, summary }: Props) {
           <div className="h-full rounded-full transition-all duration-1000"
             style={{
               width: `${summary.healthScore}%`,
-              background: summary.healthScore >= 70
-                ? 'linear-gradient(90deg,#00d4aa,#4a9eff)'
-                : summary.healthScore >= 40
-                ? 'linear-gradient(90deg,#ffd700,#ff7c3e)'
+              background: summary.healthScore >= 70 ? 'linear-gradient(90deg,#00d4aa,#4a9eff)'
+                : summary.healthScore >= 40 ? 'linear-gradient(90deg,#ffd700,#ff7c3e)'
                 : 'linear-gradient(90deg,#ff0000,#ff7c3e)'
             }} />
         </div>
@@ -85,19 +115,17 @@ export default function IssuesPanel({ issues, summary }: Props) {
             <p className="text-[9px] text-[#8888bb] font-medium">Perlu Dicek</p>
           </div>
         </div>
-
-        {/* Info: fixed issues auto-removed */}
         {summary.fixed > 0 && (
           <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#00d4aa]/5 border border-[#00d4aa]/15">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#00d4aa] shrink-0" />
             <p className="text-[10px] text-[#00d4aa] leading-relaxed">
-              <span className="font-bold">{summary.fixed} issue</span> terselesaikan & otomatis dihapus setelah divalidasi oleh YouTube API
+              <span className="font-bold">{summary.fixed} issue</span> terselesaikan & otomatis dihapus setelah divalidasi YouTube API
             </p>
           </div>
         )}
       </div>
 
-      {/* Filter tabs */}
+      {/* Filter */}
       <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
         {([
           { id: 'all', label: `Semua (${activeIssues.length})` },
@@ -119,7 +147,6 @@ export default function IssuesPanel({ issues, summary }: Props) {
         </div>
       )}
 
-      {/* Issue list grouped by category */}
       {categories.map(cat => {
         const catIssues = filtered.filter(i => i.category === cat);
         if (!catIssues.length) return null;
@@ -148,9 +175,7 @@ export default function IssuesPanel({ issues, summary }: Props) {
                         <div className="flex items-center gap-2 flex-wrap">
                           <StatusBadge status={issue.status} />
                           <span className="text-[10px] text-[#555577] capitalize">{issue.severity}</span>
-                          {videoCount > 0 && (
-                            <span className="text-[10px] text-[#555577]">{videoCount} video</span>
-                          )}
+                          {videoCount > 0 && <span className="text-[10px] text-[#555577]">{videoCount} video</span>}
                         </div>
                       </div>
                     </button>
@@ -159,7 +184,7 @@ export default function IssuesPanel({ issues, summary }: Props) {
                       <div className="mt-3 ml-6 space-y-3">
                         <p className="text-[11px] text-[#8888bb] leading-relaxed">{issue.description}</p>
 
-                        {/* Action hint */}
+                        {/* Langkah perbaikan */}
                         {issue.action && (
                           <div className="flex items-start gap-1.5 p-2.5 rounded-lg bg-[#4a9eff]/10 border border-[#4a9eff]/20">
                             <Lightbulb className="w-3.5 h-3.5 text-[#4a9eff] shrink-0 mt-0.5" />
@@ -167,7 +192,20 @@ export default function IssuesPanel({ issues, summary }: Props) {
                           </div>
                         )}
 
-                        {/* Affected videos with YouTube links */}
+                        {/* Saran siap salin */}
+                        {issue.suggestion && (
+                          <div className="rounded-lg border border-[#00d4aa]/20 bg-[#00d4aa]/5 overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 border-b border-[#00d4aa]/15">
+                              <p className="text-[10px] font-bold text-[#00d4aa] uppercase tracking-wider">Saran Siap Salin</p>
+                              <CopyButton text={issue.suggestion} />
+                            </div>
+                            <pre className="px-3 py-2.5 text-[10px] text-[#ccddcc] leading-relaxed whitespace-pre-wrap font-sans break-words">
+                              {issue.suggestion}
+                            </pre>
+                          </div>
+                        )}
+
+                        {/* Video bermasalah dengan link */}
                         {issue.affectedItems && issue.affectedItems.length > 0 && (
                           <div>
                             <p className="text-[10px] text-[#555577] mb-2 font-medium uppercase tracking-wider">
@@ -195,7 +233,7 @@ export default function IssuesPanel({ issues, summary }: Props) {
                                         <a href={studioUrl} target="_blank" rel="noopener noreferrer"
                                           onClick={e => e.stopPropagation()}
                                           title="Edit di YouTube Studio"
-                                          className="p-1 rounded-md bg-[#4a9eff]/15 text-[#4a9eff] hover:bg-[#4a9eff]/25 transition-colors text-[8px] font-bold leading-none flex items-center">
+                                          className="p-1 rounded-md bg-[#4a9eff]/15 text-[#4a9eff] hover:bg-[#4a9eff]/25 transition-colors text-[8px] font-bold leading-none flex items-center px-1.5">
                                           Edit
                                         </a>
                                       )}
@@ -204,7 +242,6 @@ export default function IssuesPanel({ issues, summary }: Props) {
                                 );
                               })}
                             </div>
-
                             {videoCount > 3 && (
                               <button
                                 onClick={() => setShowAllVideos(prev => ({ ...prev, [issue.id]: !showAll }))}
