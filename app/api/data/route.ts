@@ -4,9 +4,8 @@ import { getChannelStats, getAllVideos, computeIssues } from '@/lib/youtube';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Module-level cache (2 menit normal, bypass jika ?refresh=1)
 let cache: { data: unknown; ts: number } | null = null;
-const CACHE_TTL = 2 * 60 * 1000; // 2 menit
+const CACHE_TTL = 2 * 60 * 1000;
 
 export async function GET(request: Request) {
   try {
@@ -21,20 +20,26 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch fresh dari YouTube API
     const [channel, videos] = await Promise.all([getChannelStats(), getAllVideos()]);
-    const issues = await computeIssues(channel, videos);
+    // computeIssues returns ALL issues (incl fixed) — summary dihitung dari semua
+    const allIssues = await computeIssues(channel, videos);
+
+    const totalChecks = allIssues.length;
+    const fixedCount = allIssues.filter(i => i.status === 'fixed').length;
     const summary = {
-      total: issues.length,
-      fixed: issues.filter(i => i.status === 'fixed').length,
-      pending: issues.filter(i => i.status === 'pending').length,
-      warning: issues.filter(i => i.status === 'warning').length,
-      critical: issues.filter(i => i.severity === 'critical' && i.status !== 'fixed').length,
-      healthScore: Math.round(
-        (issues.filter(i => i.status === 'fixed').length / Math.max(issues.length, 1)) * 100
-      ),
+      total: totalChecks,
+      fixed: fixedCount,
+      pending: allIssues.filter(i => i.status === 'pending').length,
+      warning: allIssues.filter(i => i.status === 'warning').length,
+      critical: allIssues.filter(i => i.severity === 'critical' && i.status !== 'fixed').length,
+      // Health score = persentase issue yang sudah beres dari total semua check
+      healthScore: Math.round((fixedCount / Math.max(totalChecks, 1)) * 100),
     };
-    const data = { channel, videos, issues, summary };
+
+    // Client hanya terima issue yang BELUM fix — yang fixed sudah divalidasi & otomatis hilang
+    const activeIssues = allIssues.filter(i => i.status !== 'fixed');
+
+    const data = { channel, videos, issues: activeIssues, summary };
     cache = { data, ts: now };
 
     return NextResponse.json({
