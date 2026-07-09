@@ -10,9 +10,7 @@ interface Props {
 export default function NotificationManager({ issues }: Props) {
   const lastNotifiedRef = useRef<string>('');
 
-  useEffect(() => {
-    registerSW();
-  }, []);
+  useEffect(() => { registerSW(); }, []);
 
   useEffect(() => {
     if (!issues || issues.length === 0) return;
@@ -26,14 +24,6 @@ async function registerSW() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
   try {
     await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    const reg = await navigator.serviceWorker.ready;
-    if ('periodicSync' in reg) {
-      const status = await navigator.permissions.query({ name: 'periodic-background-sync' as PermissionName });
-      if (status.state === 'granted') {
-        // @ts-expect-error — periodicSync not in standard TS types yet
-        await reg.periodicSync.register('check-critical', { minInterval: 15 * 60 * 1000 });
-      }
-    }
   } catch (err) {
     console.warn('SW registration failed:', err);
   }
@@ -41,7 +31,6 @@ async function registerSW() {
 
 async function checkAndNotify(issues: IssueCheck[], lastRef: React.MutableRefObject<string>) {
   if (!('Notification' in window)) return;
-
   const critical = issues.filter(i => i.severity === 'critical' && i.status !== 'fixed');
   if (critical.length === 0) return;
 
@@ -65,12 +54,14 @@ async function checkAndNotify(issues: IssueCheck[], lastRef: React.MutableRefObj
     ? `"${critical[0].title}" belum diselesaikan!`
     : `${critical.length} isu kritis perlu perhatianmu sekarang!`;
 
-  await reg.showNotification('Isu Kritis di Channel @kz.tutorial!', {
+  // Cast to avoid missing TypeScript types for extended notification options
+  const opts = {
     body,
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: 'kz-critical',
-    renotify: true,
     data: { url: '/' },
-  });
+  } as NotificationOptions;
+
+  await reg.showNotification('Isu Kritis @kz.tutorial!', opts);
 }
