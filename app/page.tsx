@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import {
   BarChart2, AlertTriangle, Video, Search, Lightbulb,
@@ -37,10 +37,15 @@ interface DashboardData {
 }
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => r.json()).then(r => r as { data: DashboardData; timestamp: string }).then(r => ({ ...r.data, timestamp: r.timestamp }));
+  fetch(url).then(r => r.json()).then(r => {
+    const d = r as { data: DashboardData; timestamp: string };
+    return { ...d.data, timestamp: d.timestamp } as DashboardData;
+  });
 
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('overview');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncMsg, setLastSyncMsg] = useState('');
 
   const { data, error, isLoading, isValidating, mutate } = useSWR<DashboardData>(
     '/api/data',
@@ -52,6 +57,29 @@ export default function Dashboard() {
       dedupingInterval: 5_000,
     }
   );
+
+  // Force sync — bypass server cache, ambil fresh dari YouTube
+  const forceSync = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setLastSyncMsg('');
+    try {
+      await mutate(
+        fetch('/api/data?refresh=1').then(r => r.json()).then(r => {
+          const d = r as { data: DashboardData; timestamp: string };
+          return { ...d.data, timestamp: d.timestamp } as DashboardData;
+        }),
+        { revalidate: false }
+      );
+      setLastSyncMsg('Data berhasil diperbarui!');
+      setTimeout(() => setLastSyncMsg(''), 3000);
+    } catch {
+      setLastSyncMsg('Sync gagal, coba lagi');
+      setTimeout(() => setLastSyncMsg(''), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, mutate]);
 
   const channel = data?.channel ?? null;
   const videos = data?.videos ?? [];
@@ -96,7 +124,7 @@ export default function Dashboard() {
           <p className="text-[#8888bb] text-xs mt-1">Periksa koneksi internet atau YouTube API key.</p>
         </div>
         <button onClick={() => mutate()}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-red/20 text-brand-red border border-brand-red/30 rounded-xl text-sm font-medium hover:bg-brand-red/30 transition-colors">
+          className="flex items-center gap-2 px-4 py-2 bg-brand-red/20 text-brand-red border border-brand-red/30 rounded-xl text-sm font-medium">
           <RefreshCw className="w-4 h-4" /> Coba Lagi
         </button>
       </div>
@@ -114,12 +142,24 @@ export default function Dashboard() {
           <span className="text-xs font-bold text-white">@kz.tutorial</span>
         </div>
         <div className="flex items-center gap-2">
-          {isValidating && <RefreshCw className="w-3 h-3 text-[#555577] animate-spin" />}
+          {/* LIVE indicator */}
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
             <Activity className="w-3 h-3 text-[#00d4aa]" />
             <span className="text-[10px] font-semibold text-[#00d4aa]">LIVE</span>
             <span className="w-1.5 h-1.5 rounded-full bg-[#00d4aa] animate-pulse" />
           </div>
+
+          {/* Force Sync button — tap ini kalau sudah fix issue di YouTube */}
+          <button
+            onClick={forceSync}
+            disabled={isSyncing}
+            title="Sync sekarang — ambil data terbaru dari YouTube"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-semibold transition-all disabled:opacity-50
+              bg-white/5 border-white/10 text-[#8888bb] hover:bg-white/10 hover:text-white active:scale-95">
+            <RefreshCw className={`w-3 h-3 ${isSyncing || isValidating ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync'}
+          </button>
+
           {summary && (
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
               summary.healthScore >= 70 ? 'bg-[#00d4aa]/20 text-[#00d4aa]' :
@@ -130,6 +170,14 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Sync success/error toast */}
+      {lastSyncMsg && (
+        <div className={`mx-4 mt-2 px-3 py-2 rounded-lg text-[11px] font-medium text-center ${
+          lastSyncMsg.includes('berhasil') ? 'bg-[#00d4aa]/15 text-[#00d4aa] border border-[#00d4aa]/20' : 'bg-red-500/15 text-red-400 border border-red-500/20'}`}>
+          {lastSyncMsg}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 pt-3 pb-24">
