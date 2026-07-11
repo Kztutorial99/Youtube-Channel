@@ -13,14 +13,16 @@ import VideoTable from '@/components/VideoTable';
 import RecommendationsPanel from '@/components/RecommendationsPanel';
 import EngagementChart from '@/components/EngagementChart';
 import NotificationManager from '@/components/NotificationManager';
+import TopicComparePanel from '@/components/TopicComparePanel';
 import type { ChannelStats, VideoStats, IssueCheck, IssueSummary } from '@/lib/youtube';
 
-type Tab = 'overview' | 'issues' | 'videos' | 'tips';
+type Tab = 'overview' | 'issues' | 'videos' | 'tips' | 'topik';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: BarChart2 },
   { id: 'issues', label: 'Issues', icon: AlertTriangle },
   { id: 'videos', label: 'Video', icon: Video },
+  { id: 'topik', label: 'Topik', icon: Activity },
   { id: 'tips', label: 'Tips', icon: Lightbulb },
 ];
 
@@ -224,6 +226,7 @@ export default function Dashboard() {
 
         {tab === 'issues' && issues.length > 0 && summary && <IssuesPanel issues={issues} summary={summary} />}
         {tab === 'videos' && videos.length > 0 && <VideoTable videos={videos} />}
+        {tab === 'topik' && videos.length > 0 && <TopicComparePanel videos={videos} />}
         {tab === 'tips' && <RecommendationsPanel />}
       </div>
 
