@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import {
   BarChart2, AlertTriangle, Video, Lightbulb,
-  Youtube, WifiOff, RefreshCw, Activity, Download
+  Youtube, WifiOff, RefreshCw, Activity
 } from 'lucide-react';
 import ChannelHeader from '@/components/ChannelHeader';
 import StatsGrid from '@/components/StatsGrid';
@@ -14,17 +14,16 @@ import RecommendationsPanel from '@/components/RecommendationsPanel';
 import EngagementChart from '@/components/EngagementChart';
 import NotificationManager from '@/components/NotificationManager';
 import TopicComparePanel from '@/components/TopicComparePanel';
-import DownloadPanel from '@/components/DownloadPanel';
 import type { ChannelStats, VideoStats, IssueCheck, IssueSummary } from '@/lib/youtube';
 
-type Tab = 'overview' | 'issues' | 'videos' | 'topik' | 'download';
+type Tab = 'overview' | 'issues' | 'videos' | 'topik' | 'tips';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'overview',  label: 'Overview',  icon: BarChart2 },
-  { id: 'issues',    label: 'Issues',    icon: AlertTriangle },
-  { id: 'videos',    label: 'Video',     icon: Video },
-  { id: 'topik',     label: 'Topik',     icon: Activity },
-  { id: 'download',  label: 'Download',  icon: Download },
+  { id: 'overview', label: 'Overview', icon: BarChart2 },
+  { id: 'issues',   label: 'Issues',   icon: AlertTriangle },
+  { id: 'videos',   label: 'Video',    icon: Video },
+  { id: 'topik',    label: 'Topik',    icon: Activity },
+  { id: 'tips',     label: 'Tips',     icon: Lightbulb },
 ];
 
 interface DashboardData {
@@ -228,7 +227,7 @@ export default function Dashboard() {
         {tab === 'issues'   && issues.length > 0 && summary && <IssuesPanel issues={issues} summary={summary} />}
         {tab === 'videos'   && videos.length > 0 && <VideoTable videos={videos} />}
         {tab === 'topik'    && videos.length > 0 && <TopicComparePanel videos={videos} />}
-        {tab === 'download' && <DownloadPanel />}
+        {tab === 'tips' && <RecommendationsPanel />}
       </div>
 
       {/* Bottom nav */}
