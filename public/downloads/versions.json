@@ -1,0 +1,14 @@
+{
+  "latest": "1.0.0",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "filename": "ZarchiverPro.apk",
+      "size": "4.9 MB",
+      "releaseDate": "2026-07-11",
+      "changelog": "Initial release — ZArchiver Pro dengan fitur lengkap.",
+      "minAndroid": "5.0",
+      "downloads": 0
+    }
+  ]
+}
